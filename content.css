@@ -1,0 +1,272 @@
+#click-define-popup {
+  position: absolute;
+  z-index: 2147483647;
+  width: 340px;
+  max-width: 90vw;
+  background: #ffffff;
+  color: #1a1a1a;
+  border: 1px solid #d0d7de;
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  font-size: 13px;
+  line-height: 1.45;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  animation: cd-fadein 120ms ease-out;
+}
+
+@keyframes cd-fadein {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+#click-define-popup .cd-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  background: #f6f8fa;
+  border-bottom: 1px solid #d0d7de;
+}
+
+#click-define-popup .cd-word {
+  font-weight: 600;
+  font-size: 14px;
+  color: #0969da;
+  flex-shrink: 0;
+}
+
+#click-define-popup .cd-phon {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+#click-define-popup .cd-ipa {
+  color: #57606a;
+  font-size: 12px;
+  font-family: ui-monospace, monospace;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+#click-define-popup .cd-audio {
+  background: transparent;
+  border: 1px solid #d0d7de;
+  border-radius: 4px;
+  cursor: pointer;
+  padding: 1px 6px;
+  font-size: 12px;
+  line-height: 1.2;
+}
+#click-define-popup .cd-audio:hover { background: #eaeef2; }
+
+#click-define-popup .cd-langselect {
+  background: #fff;
+  border: 1px solid #d0d7de;
+  border-radius: 4px;
+  padding: 2px 4px;
+  font-size: 11px;
+  font-family: inherit;
+  color: #1a1a1a;
+  max-width: 110px;
+  cursor: pointer;
+}
+#click-define-popup .cd-langselect:hover { border-color: #0969da; }
+
+#click-define-popup .cd-close {
+  background: transparent;
+  border: none;
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+  color: #57606a;
+  padding: 0 4px;
+  margin-left: auto;
+  flex-shrink: 0;
+}
+#click-define-popup .cd-close:hover { color: #1a1a1a; }
+
+#click-define-popup .cd-body {
+  padding: 10px 12px;
+  overflow-y: auto;
+  flex: 1 1 auto;
+  max-height: 380px;
+}
+
+#click-define-popup .cd-loading,
+#click-define-popup .cd-error {
+  color: #57606a;
+  font-style: italic;
+}
+#click-define-popup .cd-error { color: #cf222e; }
+
+#click-define-popup .cd-chiprow {
+  margin-bottom: 8px;
+  padding-bottom: 8px;
+  border-bottom: 1px dashed #d0d7de;
+}
+#click-define-popup .cd-chiplabel {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: #57606a;
+  margin-bottom: 4px;
+}
+#click-define-popup .cd-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+#click-define-popup .cd-chip {
+  background: #ddf4ff;
+  color: #0969da;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  padding: 2px 8px;
+  font-size: 11px;
+  font-family: inherit;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background 80ms;
+}
+#click-define-popup .cd-chip:hover {
+  background: #b6e3ff;
+  border-color: #0969da;
+}
+
+#click-define-popup .cd-back {
+  background: transparent;
+  border: 1px solid #d0d7de;
+  border-radius: 4px;
+  cursor: pointer;
+  padding: 0 6px;
+  font-size: 13px;
+  line-height: 1.4;
+  color: #57606a;
+  flex-shrink: 0;
+}
+#click-define-popup .cd-back:hover { background: #eaeef2; color: #1a1a1a; }
+
+#click-define-popup .cd-lang-block + .cd-lang-block {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px dashed #d0d7de;
+}
+
+#click-define-popup .cd-lang {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: #57606a;
+  margin-bottom: 4px;
+}
+
+#click-define-popup .cd-pos {
+  font-style: italic;
+  color: #6e7781;
+  margin-top: 6px;
+  font-size: 12px;
+}
+
+#click-define-popup .cd-defs {
+  margin: 4px 0 0 0;
+  padding-left: 20px;
+}
+
+#click-define-popup .cd-defs li {
+  margin-bottom: 4px;
+}
+
+#click-define-popup .cd-examples {
+  margin-top: 4px;
+  padding-left: 8px;
+  border-left: 2px solid #d0d7de;
+}
+#click-define-popup .cd-example {
+  color: #57606a;
+  font-style: italic;
+  font-size: 12px;
+  margin-bottom: 2px;
+}
+
+#click-define-popup .cd-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 10px;
+  background: #f6f8fa;
+  border-top: 1px solid #d0d7de;
+  gap: 8px;
+}
+
+#click-define-popup .cd-expand {
+  background: #0969da;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  padding: 4px 10px;
+  font-size: 12px;
+  cursor: pointer;
+}
+#click-define-popup .cd-expand:hover { background: #0860c4; }
+
+#click-define-popup .cd-link {
+  color: #0969da;
+  text-decoration: none;
+  font-size: 12px;
+}
+#click-define-popup .cd-link:hover { text-decoration: underline; }
+
+@media (prefers-color-scheme: dark) {
+  #click-define-popup {
+    background: #1e1e1e;
+    color: #e6e6e6;
+    border-color: #3a3a3a;
+  }
+  #click-define-popup .cd-header,
+  #click-define-popup .cd-footer {
+    background: #2a2a2a;
+    border-color: #3a3a3a;
+  }
+  #click-define-popup .cd-word { color: #58a6ff; }
+  #click-define-popup .cd-close { color: #9ba3ad; }
+  #click-define-popup .cd-close:hover { color: #fff; }
+  #click-define-popup .cd-lang,
+  #click-define-popup .cd-pos,
+  #click-define-popup .cd-loading,
+  #click-define-popup .cd-ipa,
+  #click-define-popup .cd-chiplabel,
+  #click-define-popup .cd-example { color: #9ba3ad; }
+  #click-define-popup .cd-lang-block + .cd-lang-block,
+  #click-define-popup .cd-chiprow,
+  #click-define-popup .cd-examples { border-color: #3a3a3a; }
+  #click-define-popup .cd-link { color: #58a6ff; }
+  #click-define-popup .cd-chip {
+    background: #0d3a66;
+    color: #79c0ff;
+  }
+  #click-define-popup .cd-chip:hover {
+    background: #155a99;
+    border-color: #58a6ff;
+  }
+  #click-define-popup .cd-back {
+    border-color: #3a3a3a;
+    color: #9ba3ad;
+  }
+  #click-define-popup .cd-back:hover { background: #333; color: #fff; }
+  #click-define-popup .cd-audio {
+    border-color: #3a3a3a;
+  }
+  #click-define-popup .cd-audio:hover { background: #333; }
+  #click-define-popup .cd-langselect {
+    background: #1e1e1e;
+    color: #e6e6e6;
+    border-color: #3a3a3a;
+  }
+}

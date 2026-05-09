@@ -1,0 +1,36 @@
+{
+  "manifest_version": 3,
+  "name": "Click Define",
+  "version": "0.2.0",
+  "description": "Double-click any word to see its definition, pronunciation, synonyms, and antonyms in any language.",
+  "author": "HalfToast",
+  "homepage_url": "https://github.com/HalfToast/click-def",
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "click-define",
+      "strict_min_version": "115.0"
+    }
+  },
+  "permissions": ["storage"],
+  "host_permissions": [
+    "https://en.wiktionary.org/*",
+    "https://api.dictionaryapi.dev/*",
+    "https://api.datamuse.com/*"
+  ],
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content.js"],
+      "css": ["content.css"],
+      "run_at": "document_idle"
+    }
+  ],
+  "options_ui": {
+    "page": "options.html",
+    "open_in_tab": false
+  },
+  "icons": {
+    "48": "icon.svg",
+    "96": "icon.svg"
+  }
+}

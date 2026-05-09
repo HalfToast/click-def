@@ -1,0 +1,135 @@
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  font-size: 14px;
+  color: #1a1a1a;
+  background: #f6f8fa;
+  min-width: 420px;
+}
+
+main {
+  padding: 20px 24px;
+  max-width: 520px;
+}
+
+h1 {
+  font-size: 20px;
+  margin: 0;
+  color: #0969da;
+}
+.subtitle {
+  margin: 2px 0 18px;
+  color: #57606a;
+  font-size: 13px;
+}
+
+section {
+  background: #fff;
+  border: 1px solid #d0d7de;
+  border-radius: 8px;
+  padding: 14px 16px;
+  margin-bottom: 14px;
+}
+
+h2 {
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: #57606a;
+  margin: 0 0 10px;
+}
+
+.toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 0;
+  cursor: pointer;
+}
+
+.toggle input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+}
+
+.field {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 0;
+  gap: 12px;
+}
+
+.field input[type="number"] {
+  width: 64px;
+  padding: 4px 6px;
+  border: 1px solid #d0d7de;
+  border-radius: 4px;
+  font: inherit;
+}
+
+.hint {
+  margin: 0 0 8px;
+  color: #57606a;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+kbd {
+  background: #f6f8fa;
+  border: 1px solid #d0d7de;
+  border-radius: 3px;
+  padding: 1px 5px;
+  font-size: 11px;
+  font-family: ui-monospace, monospace;
+}
+
+.actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 8px;
+}
+
+button {
+  background: #0969da;
+  color: #fff;
+  border: none;
+  border-radius: 5px;
+  padding: 7px 14px;
+  font: inherit;
+  cursor: pointer;
+}
+button:hover { background: #0860c4; }
+button.secondary {
+  background: #fff;
+  color: #1a1a1a;
+  border: 1px solid #d0d7de;
+}
+button.secondary:hover { background: #f6f8fa; }
+
+.status {
+  font-size: 12px;
+  color: #1a7f37;
+  opacity: 0;
+  transition: opacity 200ms;
+}
+.status.show { opacity: 1; }
+
+@media (prefers-color-scheme: dark) {
+  body { background: #1a1a1a; color: #e6e6e6; }
+  section { background: #2a2a2a; border-color: #3a3a3a; }
+  h1 { color: #58a6ff; }
+  .subtitle, h2, .hint { color: #9ba3ad; }
+  .field input[type="number"] {
+    background: #1e1e1e; color: #e6e6e6; border-color: #3a3a3a;
+  }
+  kbd { background: #1e1e1e; border-color: #3a3a3a; color: #e6e6e6; }
+  button.secondary {
+    background: #2a2a2a; color: #e6e6e6; border-color: #3a3a3a;
+  }
+  button.secondary:hover { background: #333; }
+}

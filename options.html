@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Click Define — Settings</title>
+  <link rel="stylesheet" href="options.css">
+</head>
+<body>
+  <main>
+    <h1>Click Define</h1>
+    <p class="subtitle">Settings</p>
+
+    <section>
+      <h2>What to show</h2>
+      <label class="toggle">
+        <input type="checkbox" id="showPronunciation" checked>
+        <span>Pronunciation (IPA + audio button)</span>
+      </label>
+      <label class="toggle">
+        <input type="checkbox" id="showSynonyms" checked>
+        <span>Synonyms</span>
+      </label>
+      <label class="toggle">
+        <input type="checkbox" id="showAntonyms" checked>
+        <span>Antonyms</span>
+      </label>
+      <label class="toggle">
+        <input type="checkbox" id="showExamples">
+        <span>Example sentences (in compact view)</span>
+      </label>
+      <label class="toggle">
+        <input type="checkbox" id="autoExpand">
+        <span>Always show full definition by default</span>
+      </label>
+    </section>
+
+    <section>
+      <h2>Behavior</h2>
+      <label class="toggle">
+        <input type="checkbox" id="requireModifier">
+        <span>Only trigger when holding <kbd>Alt</kbd> while double-clicking</span>
+      </label>
+      <label class="toggle">
+        <input type="checkbox" id="autoPlayAudio">
+        <span>Auto-play pronunciation when popup opens</span>
+      </label>
+      <label class="field">
+        <span>Max compact definitions per part of speech</span>
+        <input type="number" id="maxShortDefs" min="1" max="10" value="2">
+      </label>
+    </section>
+
+    <section>
+      <h2>Sources</h2>
+      <p class="hint">
+        <strong>Wiktionary</strong> provides multilingual definitions.
+        <strong>Free Dictionary API</strong> provides pronunciation, synonyms, and antonyms (English only).
+      </p>
+      <label class="toggle">
+        <input type="checkbox" id="useFreeDictionary" checked>
+        <span>Use Free Dictionary API for English extras</span>
+      </label>
+    </section>
+
+    <div class="actions">
+      <button id="save">Save</button>
+      <button id="reset" class="secondary">Reset to defaults</button>
+      <span id="status" class="status"></span>
+    </div>
+  </main>
+  <script src="options.js"></script>
+</body>
+</html>
