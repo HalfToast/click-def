@@ -3,6 +3,7 @@ click-define.zip
 *.xpi
 dist/
 build/
+icon-*.png
 
 # Editor / OS
 .vscode/

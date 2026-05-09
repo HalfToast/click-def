@@ -21,6 +21,11 @@ $files = @(
     "README.md"
 )
 
+# Optionally include PNG icons if they exist (generated via export-icon.html)
+foreach ($png in @("icon-48.png", "icon-96.png", "icon-128.png")) {
+    if (Test-Path (Join-Path $root $png)) { $files += $png }
+}
+
 foreach ($f in $files) {
     if (-not (Test-Path (Join-Path $root $f))) {
         throw "Missing required file: $f"
