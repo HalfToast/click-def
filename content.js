@@ -102,9 +102,16 @@
   function rerender() {
     const popup = document.getElementById(POPUP_ID);
     if (!popup) return;
-    popup.innerHTML = renderContent();
+    setHtml(popup, renderContent());
     positionPopup(popup, lastRect);
     bindHandlers();
+  }
+
+  function setHtml(el, html) {
+    el.replaceChildren();
+    const doc = new DOMParser().parseFromString(`<div>${html}</div>`, "text/html");
+    const wrapper = doc.body.firstChild;
+    while (wrapper && wrapper.firstChild) el.appendChild(wrapper.firstChild);
   }
 
   function bindHandlers() {
@@ -265,7 +272,7 @@
     removePopup();
     const popup = document.createElement("div");
     popup.id = POPUP_ID;
-    popup.innerHTML = html;
+    setHtml(popup, html);
     document.body.appendChild(popup);
     positionPopup(popup, rect);
     popup.querySelector(".cd-close")?.addEventListener("click", removePopup);
@@ -503,9 +510,8 @@
   }
 
   function stripHtml(s) {
-    const tmp = document.createElement("div");
-    tmp.innerHTML = s || "";
-    return tmp.textContent || "";
+    if (!s) return "";
+    return new DOMParser().parseFromString(s, "text/html").body.textContent || "";
   }
 
   function escapeHtml(s) {
