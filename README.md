@@ -8,7 +8,7 @@ A Firefox extension that shows the definition of any word, in any language, when
 - **Multilingual** definitions via Wiktionary (hundreds of languages).
 - **Language picker** in the popup when a word has entries in multiple languages.
 - **Pronunciation** with IPA and an audio button (English).
-- **Synonyms & antonyms** as clickable chips — click one to look it up; ← to go back.
+- **Synonyms & antonyms** as clickable chips; click one to look it up; ← to go back.
 - **Lemma fallback** finds "running" → "run", "boxes" → "box", "happily" → "happy".
 - **Settings page** for toggles and preferences.
 - Light + dark mode, smart positioning, `Esc` to dismiss.
