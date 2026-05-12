@@ -24,3 +24,10 @@ yarn-error.log*
 .env
 .env.local
 *.local
+
+# Misc
+*.log
+*.bak
+*.tmp
+*.ps1
+SUBMISSION.md
