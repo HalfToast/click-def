@@ -6,9 +6,9 @@
 
 When you double-click a word, the extension sends only that single word to one or more of the following public APIs to retrieve its definition:
 
-- **Wiktionary** (`en.wiktionary.org`) — definitions in any language
-- **Free Dictionary API** (`api.dictionaryapi.dev`) — English pronunciation, IPA, audio, synonyms, antonyms
-- **Datamuse** (`api.datamuse.com`) — synonyms and antonyms
+- **Wiktionary** (`en.wiktionary.org`) - definitions in any language
+- **Free Dictionary API** (`api.dictionaryapi.dev`) - English pronunciation, IPA, audio, synonyms, antonyms
+- **Datamuse** (`api.datamuse.com`) - synonyms and antonyms
 
 No other content from the page is transmitted. No browsing history, page content, URLs, identifiers, or user data is collected.
 

@@ -182,8 +182,11 @@
     const push = (w) => {
       if (w && !seen.has(w)) { seen.add(w); variants.push(w); }
     };
-    push(word);
+    // Lowercase first: difficult/rare words are almost always lowercase common-noun/verb/adj forms.
+    // Sentence-initial capitalization is positional, not semantic, so we should treat "Obfuscate"
+    // and "obfuscate" the same. Proper nouns (Apple, DNA) fall through to the next variants.
     push(word.toLowerCase());
+    push(word);
     push(word.charAt(0).toUpperCase() + word.slice(1).toLowerCase());
     push(word.toUpperCase());
     return variants;
