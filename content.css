@@ -106,6 +106,38 @@
 }
 #click-define-popup .cd-error { color: #cf222e; }
 
+#click-define-popup .cd-net-icon {
+  font-size: 20px;
+  font-style: normal;
+  text-align: center;
+  margin-bottom: 4px;
+}
+#click-define-popup .cd-net-msg {
+  font-style: normal;
+  font-weight: 600;
+  text-align: center;
+  color: #cf222e;
+}
+#click-define-popup .cd-net-sub {
+  font-style: normal;
+  text-align: center;
+  color: #57606a;
+  font-size: 12px;
+  margin-top: 4px;
+}
+
+#click-define-popup .cd-retry {
+  background: #0969da;
+  color: #fff;
+  border: none;
+  border-radius: 4px;
+  padding: 4px 12px;
+  font-size: 12px;
+  font-family: inherit;
+  cursor: pointer;
+}
+#click-define-popup .cd-retry:hover { background: #0860c4; }
+
 #click-define-popup .cd-chiprow {
   margin-bottom: 8px;
   padding-bottom: 8px;
@@ -152,6 +184,20 @@
   flex-shrink: 0;
 }
 #click-define-popup .cd-back:hover { background: #eaeef2; color: #1a1a1a; }
+
+#click-define-popup .cd-resolved {
+  background: #ddf4ff;
+  color: #0969da;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  padding: 1px 8px;
+  font-size: 11px;
+  font-family: inherit;
+  cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+#click-define-popup .cd-resolved:hover { background: #b6e3ff; border-color: #0969da; }
 
 #click-define-popup .cd-lang-block + .cd-lang-block {
   margin-top: 10px;
@@ -276,6 +322,15 @@
     color: #9ba3ad;
   }
   #click-define-popup .cd-back:hover { background: #333; color: #fff; }
+  #click-define-popup .cd-resolved {
+    background: #0d3a66;
+    color: #79c0ff;
+  }
+  #click-define-popup .cd-resolved:hover {
+    background: #155a99;
+    border-color: #58a6ff;
+  }
+  #click-define-popup .cd-net-sub { color: #9ba3ad; }
   #click-define-popup .cd-audio {
     border-color: #3a3a3a;
   }

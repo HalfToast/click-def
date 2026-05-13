@@ -7,7 +7,8 @@ const DEFAULTS = {
   requireModifier: false,
   autoPlayAudio: false,
   maxShortDefs: 2,
-  useFreeDictionary: true
+  useFreeDictionary: true,
+  autoResolveForms: false
 };
 
 const FIELDS = Object.keys(DEFAULTS);

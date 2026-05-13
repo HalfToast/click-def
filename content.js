@@ -12,7 +12,8 @@
     autoPlayAudio: false,
     maxShortDefs: 2,
     useFreeDictionary: true,
-    preferredLanguage: "auto"
+    preferredLanguage: "auto",
+    autoResolveForms: false
   };
 
   const storageApi = (typeof browser !== "undefined" ? browser : chrome).storage.sync;
@@ -35,6 +36,8 @@
   let expanded = false;
   let lastRect = null;
   let selectedLang = null;
+  let resolvedFrom = null;  // we auto-resolved to a lemma; this is the original form
+  let formOfTarget = null;  // we're showing a form's entry; this is the lemma it points to
   const history = []; // stack of previous words for back button
 
   const isTouch = matchMedia("(pointer: coarse)").matches;
@@ -94,7 +97,10 @@
     await lookup(word);
   }
 
-  async function lookup(word) {
+  async function lookup(word, opts = {}) {
+    const skipResolve = !!opts.skipResolve;
+    const fromForm = opts.fromForm || null;
+
     currentWord = word;
     currentWiktionary = null;
     currentDictionary = null;
@@ -102,18 +108,41 @@
     currentAnt = [];
     expanded = !!settings.autoExpand;
     selectedLang = null;
+    resolvedFrom = fromForm;
+    formOfTarget = null;
 
     showPopup(lastRect, renderLoading(word));
 
+    let wikt;
+    try {
+      wikt = await fetchWiktionary(word);
+    } catch (err) {
+      wikt = { error: err.message, network: !!err.network };
+    }
+
+    // Detect inflected forms. Behavior depends on the autoResolveForms setting:
+    //   - true  → recurse into the lemma immediately (and show "← form" breadcrumb).
+    //   - false → keep showing the form's entry but expose a "→ lemma" chip so the
+    //             user can navigate to the base word manually. Default.
+    if (!skipResolve && !fromForm && wikt && !wikt.error) {
+      const lemma = detectFormOf(wikt);
+      if (lemma && lemma.toLowerCase() !== word.toLowerCase()) {
+        if (settings.autoResolveForms) {
+          return lookup(lemma, { fromForm: word });
+        }
+        formOfTarget = lemma;
+      }
+    }
+
+    currentWiktionary = wikt;
+
     const tasks = [
-      fetchWiktionary(word).catch((err) => ({ error: err.message })),
       settings.useFreeDictionary ? fetchFreeDictionary(word).catch(() => null) : Promise.resolve(null),
       (settings.showSynonyms ? fetchDatamuse(word, "rel_syn") : Promise.resolve([])).catch(() => []),
       (settings.showAntonyms ? fetchDatamuse(word, "rel_ant") : Promise.resolve([])).catch(() => [])
     ];
 
-    const [wikt, dict, syns, ants] = await Promise.all(tasks);
-    currentWiktionary = wikt;
+    const [dict, syns, ants] = await Promise.all(tasks);
     currentDictionary = dict;
     currentSyn = syns || [];
     currentAnt = ants || [];
@@ -125,6 +154,63 @@
       const audioUrl = firstAudioUrl(currentDictionary);
       if (audioUrl) playAudio(audioUrl);
     }
+  }
+
+  // Returns the lemma if every definition in the language we'd display is a
+  // form-of pointer (e.g. "Plural of box", "Simple past of run", "Misspelling of
+  // receive"). Only checks the active language to avoid cross-language false
+  // positives (e.g. "Ran" has English meanings but a Manx entry pointing to "Arran").
+  //
+  // Detection is structural: a definition counts as form-of when it ends with
+  // "of WORD." (or close to it) AND the prefix contains at least one of a known
+  // list of grammatical keywords. This is broader and more robust than a single
+  // enumerated phrase pattern.
+  const FORM_KEYWORDS = /(?:^|[^\p{L}])(plural|singular|dual|past|present|future|tense|participle|gerund|comparative|superlative|feminine|masculine|neuter|diminutive|augmentative|genitive|accusative|dative|nominative|vocative|locative|instrumental|ablative|ergative|infinitive|imperative|subjunctive|indicative|conditional|optative|imperfect|perfect|pluperfect|preterite|aorist|continuous|progressive|active|passive|reflexive|honorific|polite|inflection|inflected|conjugation|conjugated|misspelling|abbreviation|abbreviated|acronym|initialism|contraction|contracted|romanization|transliteration|romaji|hiragana|katakana|kanji|first|second|third|person|alternative\s+(?:form|spelling|letter[\-‑\s]case)|obsolete\s+(?:form|spelling)|archaic\s+(?:form|spelling)|eye\s+dialect|standard\s+spelling|nonstandard\s+spelling|deprecated\s+(?:form|spelling))(?:$|[^\p{L}])/iu;
+
+  function isFormOfDefinition(text) {
+    if (!text) return null;
+    // Strip a leading parenthetical qualifier like "(archaic)" or "(now obsolete)".
+    let t = text.trim().replace(/^\(\s*[^()]+\s*\)\s*/u, "");
+    // Remove trailing punctuation/quotes.
+    t = t.replace(/[.;,:!?\s"'“”]+$/gu, "");
+
+    // Find the last " of " — the target word follows it.
+    const idx = t.toLowerCase().lastIndexOf(" of ");
+    if (idx < 0) return null;
+    const prefix = t.slice(0, idx);
+    const suffix = t.slice(idx + 4).trim().replace(/^["'“]+|["'”]+$/gu, "");
+
+    // Suffix must be a single word (letters, apostrophes, hyphens, CJK, etc).
+    if (!/^[\p{L}][\p{L}'\-]*$/u.test(suffix)) return null;
+    // Prefix should not be implausibly long (real definitions of real words
+    // usually have more content after "of"). Cap at ~80 chars.
+    if (prefix.length > 80) return null;
+    // Prefix must contain at least one grammatical keyword.
+    if (!FORM_KEYWORDS.test(prefix)) return null;
+    return suffix;
+  }
+
+  function detectFormOf(wikt) {
+    const lang = pickInitialLang(wikt);
+    if (!lang || !wikt[lang]) return null;
+    const entries = wikt[lang];
+
+    let target = null;
+    let defCount = 0;
+
+    for (const entry of entries) {
+      for (const d of entry.definitions || []) {
+        const text = stripHtml(d.definition).trim();
+        if (!text) continue; // skip empty placeholder entries
+        defCount++;
+        const t = isFormOfDefinition(text);
+        if (!t) return null;
+        if (target && target.toLowerCase() !== t.toLowerCase()) return null;
+        target = t;
+      }
+    }
+
+    return defCount > 0 ? target : null;
   }
 
   function rerender() {
@@ -157,6 +243,11 @@
       if (prev) lookup(prev);
     });
 
+    popup.querySelector(".cd-retry")?.addEventListener("click", (e) => {
+      e.stopPropagation();
+      if (currentWord) lookup(currentWord, { skipResolve: !!resolvedFrom });
+    });
+
     popup.querySelector(".cd-expand")?.addEventListener("click", (e) => {
       e.stopPropagation();
       expanded = !expanded;
@@ -181,6 +272,17 @@
       });
     });
 
+    popup.querySelector(".cd-resolved")?.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const target = e.currentTarget.dataset.word;
+      const mode = e.currentTarget.dataset.mode;
+      if (!target) return;
+      history.push(currentWord);
+      // mode=form  → user wants to see the literal inflected form, skip resolution
+      // mode=lemma → navigate to base word, normal lookup behavior
+      lookup(target, { skipResolve: mode === "form" });
+    });
+
     const langSel = popup.querySelector(".cd-langselect");
     if (langSel) {
       langSel.addEventListener("change", (e) => {
@@ -200,6 +302,9 @@
     if (!langs.length) return null;
     const pref = settings.preferredLanguage;
     if (pref && pref !== "auto" && langs.includes(pref)) return pref;
+    // Auto: use <html lang="…"> if it matches a Wiktionary code, then English, then first.
+    const pageLang = (document.documentElement.lang || "").split(/[-_]/)[0].toLowerCase();
+    if (pageLang && langs.includes(pageLang)) return pageLang;
     if (langs.includes("en")) return "en";
     return langs[0];
   }
@@ -251,11 +356,25 @@
     return [...out];
   }
 
+  // `fetch` throws a TypeError for network-level failures (DNS, offline, dropped
+  // connection, CORS) and not for HTTP error responses. We retry those once after a
+  // brief delay since most are transient.
+  async function fetchWithRetry(url, init) {
+    try {
+      return await fetch(url, init);
+    } catch (e) {
+      if (!(e instanceof TypeError)) throw e;
+      await new Promise((r) => setTimeout(r, 400));
+      return fetch(url, init); // second attempt; if it throws, caller handles
+    }
+  }
+
   async function fetchWiktionary(word) {
     let lastErr;
+    let networkFailed = false;
     const tryVariant = async (v) => {
       const url = `https://en.wiktionary.org/api/rest_v1/page/definition/${encodeURIComponent(v)}`;
-      const res = await fetch(url, { headers: { Accept: "application/json" } });
+      const res = await fetchWithRetry(url, { headers: { Accept: "application/json" } });
       if (res.ok) return res.json();
       if (res.status !== 404) throw new Error(`Lookup failed (${res.status})`);
       return null;
@@ -265,7 +384,10 @@
       try {
         const r = await tryVariant(variant);
         if (r) return r;
-      } catch (e) { lastErr = e; }
+      } catch (e) {
+        lastErr = e;
+        if (e instanceof TypeError) networkFailed = true;
+      }
     }
     // Lemma fallbacks
     for (const lemma of lemmaCandidates(word)) {
@@ -273,8 +395,16 @@
         try {
           const r = await tryVariant(variant);
           if (r) return r;
-        } catch (e) { lastErr = e; }
+        } catch (e) {
+          lastErr = e;
+          if (e instanceof TypeError) networkFailed = true;
+        }
       }
+    }
+    if (networkFailed) {
+      const err = new Error("NETWORK");
+      err.network = true;
+      throw err;
     }
     throw lastErr || new Error("No definition found.");
   }
@@ -284,7 +414,7 @@
     for (const variant of candidates) {
       const url = `https://api.dictionaryapi.dev/api/v2/entries/en/${encodeURIComponent(variant)}`;
       try {
-        const res = await fetch(url, { headers: { Accept: "application/json" } });
+        const res = await fetchWithRetry(url, { headers: { Accept: "application/json" } });
         if (res.ok) return res.json();
       } catch {}
     }
@@ -293,10 +423,14 @@
 
   async function fetchDatamuse(word, rel) {
     const url = `https://api.datamuse.com/words?${rel}=${encodeURIComponent(word.toLowerCase())}&max=20`;
-    const res = await fetch(url);
-    if (!res.ok) return [];
-    const data = await res.json();
-    return data.map((d) => d.word).filter(Boolean);
+    try {
+      const res = await fetchWithRetry(url);
+      if (!res.ok) return [];
+      const data = await res.json();
+      return data.map((d) => d.word).filter(Boolean);
+    } catch {
+      return [];
+    }
   }
 
   function showPopup(rect, html) {
@@ -341,6 +475,8 @@
     if (left < MARGIN) left = MARGIN;
     if (left + pw > vw - MARGIN) left = vw - pw - MARGIN;
 
+    // Document coordinates with position: absolute so the popup sticks to the
+    // word being defined — when the page scrolls, the popup scrolls with it.
     popup.style.left = `${left + window.scrollX}px`;
     popup.style.top = `${top + window.scrollY}px`;
   }
@@ -366,17 +502,32 @@
     `;
   }
 
-  function renderError(word, msg) {
+  function renderError(word, msg, isNetwork) {
+    const body = isNetwork
+      ? `<div class="cd-body cd-error">
+           <div class="cd-net-icon">⚠</div>
+           <div class="cd-net-msg">Network error</div>
+           <div class="cd-net-sub">Could not reach the dictionary. Check your connection and try again.</div>
+         </div>`
+      : `<div class="cd-body cd-error">${escapeHtml(msg)}</div>`;
+
+    const footer = isNetwork
+      ? `<div class="cd-footer">
+           <button class="cd-retry">Retry</button>
+           <a class="cd-link" href="https://en.wiktionary.org/wiki/${encodeURIComponent(word)}" target="_blank" rel="noopener">Open in Wiktionary</a>
+         </div>`
+      : `<div class="cd-footer">
+           <a class="cd-link" href="https://en.wiktionary.org/wiki/${encodeURIComponent(word)}" target="_blank" rel="noopener">Open in Wiktionary</a>
+         </div>`;
+
     return `
       <div class="cd-header">
         ${renderBackBtn()}
         <span class="cd-word">${escapeHtml(word)}</span>
         <button class="cd-close" aria-label="Close">×</button>
       </div>
-      <div class="cd-body cd-error">${escapeHtml(msg)}</div>
-      <div class="cd-footer">
-        <a class="cd-link" href="https://en.wiktionary.org/wiki/${encodeURIComponent(word)}" target="_blank" rel="noopener">Open in Wiktionary</a>
-      </div>
+      ${body}
+      ${footer}
     `;
   }
 
@@ -385,12 +536,22 @@
     return `<button class="cd-back" title="Back" aria-label="Back">←</button>`;
   }
 
+  function renderResolvedFrom() {
+    if (resolvedFrom) {
+      return `<button class="cd-resolved" data-word="${escapeHtml(resolvedFrom)}" data-mode="form" title="View “${escapeHtml(resolvedFrom)}” as its own entry">← ${escapeHtml(resolvedFrom)}</button>`;
+    }
+    if (formOfTarget) {
+      return `<button class="cd-resolved" data-word="${escapeHtml(formOfTarget)}" data-mode="lemma" title="View base word “${escapeHtml(formOfTarget)}”">→ ${escapeHtml(formOfTarget)}</button>`;
+    }
+    return "";
+  }
+
   function renderContent() {
     const word = currentWord;
     const wikt = currentWiktionary;
 
     if (!wikt || wikt.error) {
-      return renderError(word, wikt?.error || "No definition found.");
+      return renderError(word, wikt?.error || "No definition found.", !!wikt?.network);
     }
 
     const phonHtml = settings.showPronunciation ? renderPhonetics(currentDictionary) : "";
@@ -405,15 +566,22 @@
     const entries = wikt[activeLang];
     const langName = entries[0]?.language || activeLang;
     const posBlocks = entries.map((entry) => {
-      const defs = entry.definitions || [];
+      // Wiktionary occasionally returns empty or whitespace-only entries (header
+      // rows, sub-sense placeholders). Drop them before slicing so the user sees
+      // real definitions in the visible range.
+      const defs = (entry.definitions || []).filter((d) => stripHtml(d.definition).trim().length > 0);
+      if (!defs.length) return "";
       const limit = Math.max(1, Number(settings.maxShortDefs) || 2);
       const shown = expanded ? defs : defs.slice(0, limit);
       const items = shown.map((d) => {
         const text = stripHtml(d.definition);
-        const showEx = (expanded || settings.showExamples) && d.examples?.length;
+        const cleanExamples = (d.examples || [])
+          .map((ex) => stripHtml(ex))
+          .filter((ex) => ex.length > 0);
+        const showEx = (expanded || settings.showExamples) && cleanExamples.length > 0;
         const examples = showEx
-          ? `<div class="cd-examples">${d.examples
-              .map((ex) => `<div class="cd-example">${escapeHtml(stripHtml(ex))}</div>`)
+          ? `<div class="cd-examples">${cleanExamples
+              .map((ex) => `<div class="cd-example">${escapeHtml(ex)}</div>`)
               .join("")}</div>`
           : "";
         return `<li>${escapeHtml(text)}${examples}</li>`;
@@ -438,6 +606,7 @@
       <div class="cd-header">
         ${renderBackBtn()}
         <span class="cd-word">${escapeHtml(word)}</span>
+        ${renderResolvedFrom()}
         ${phonHtml}
         ${langPickerHtml}
         <button class="cd-close" aria-label="Close">×</button>
@@ -542,7 +711,10 @@
 
   function stripHtml(s) {
     if (!s) return "";
-    return new DOMParser().parseFromString(s, "text/html").body.textContent || "";
+    const doc = new DOMParser().parseFromString(s, "text/html");
+    // <style> and <script> contribute their raw CSS/JS to textContent — strip them.
+    doc.querySelectorAll("style, script").forEach((n) => n.remove());
+    return (doc.body.textContent || "").trim();
   }
 
   function escapeHtml(s) {

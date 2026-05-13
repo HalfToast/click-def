@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.4.0
+
+- **Filter empty definitions and examples.** Wiktionary occasionally returns blank or whitespace-only definition entries (usually sub-sense placeholders) and embedded `<style>` blocks that leaked through as raw CSS text (e.g. `.mw-parser-output .defdate{font-size:smaller}` appearing at the end of a definition). Both are now stripped before rendering, so the numbered list is clean and no orphan bullets appear under examples.
+- **Inflected-form detection.** When you look up a word whose entry is purely a pointer to a base word (e.g. "boxes" → "plural of box", "ran" → "simple past of run", "happier" → "comparative of happy", "recieve" → "misspelling of receive"), the popup shows a chip in the header you can click to jump to the base word. Works for plurals, tenses, participles, gerunds, comparatives, superlatives, misspellings, romanizations, gendered and case forms in other languages, and "(archaic)"-style qualifiers. Words with their own meanings ("glasses", "drunk", "data") are left alone. New setting **Auto-show base word for inflected forms** (off by default) reverses the direction, jumping straight to the lemma with a `← boxes` chip to return.
+- **Sticky popup.** The popup now scrolls with the word being defined instead of staying anchored to a fixed viewport position.
+- **Page language auto-detect.** When no language preference is set, the popup picker defaults to the page's language (from `<html lang>`). Reading a French article, "chat" defaults to French; reading German, "Bank" defaults to German.
+- **Network resilience.** Failed fetches retry once after a 400 ms delay, which catches most transient DNS/connection hiccups silently. When a request really fails, the popup shows a clear "Network error" state with a Retry button instead of the raw `NetworkError when attempting to fetch resource` message.
+
 ## 0.3.0
 
 - Added Firefox for Android support. Long-press a word to select it and the popup appears automatically (the desktop double-click still works on devices with a mouse).
