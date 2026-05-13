@@ -8,7 +8,8 @@ const DEFAULTS = {
   autoPlayAudio: false,
   maxShortDefs: 2,
   useFreeDictionary: true,
-  autoResolveForms: false
+  autoResolveForms: false,
+  preferredLanguage: "auto"
 };
 
 const FIELDS = Object.keys(DEFAULTS);

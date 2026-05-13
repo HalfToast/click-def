@@ -218,7 +218,6 @@
     if (!popup) return;
     setHtml(popup, renderContent());
     positionPopup(popup, lastRect);
-    bindHandlers();
   }
 
   function setHtml(el, html) {
@@ -228,72 +227,57 @@
     while (wrapper && wrapper.firstChild) el.appendChild(wrapper.firstChild);
   }
 
-  function bindHandlers() {
-    const popup = document.getElementById(POPUP_ID);
-    if (!popup) return;
-
-    popup.querySelector(".cd-close")?.addEventListener("click", (e) => {
-      e.stopPropagation();
-      removePopup();
-    });
-
-    popup.querySelector(".cd-back")?.addEventListener("click", (e) => {
-      e.stopPropagation();
-      const prev = history.pop();
-      if (prev) lookup(prev);
-    });
-
-    popup.querySelector(".cd-retry")?.addEventListener("click", (e) => {
-      e.stopPropagation();
-      if (currentWord) lookup(currentWord, { skipResolve: !!resolvedFrom });
-    });
-
-    popup.querySelector(".cd-expand")?.addEventListener("click", (e) => {
-      e.stopPropagation();
-      expanded = !expanded;
-      rerender();
-    });
-
-    popup.querySelectorAll(".cd-audio").forEach((btn) => {
-      btn.addEventListener("click", (e) => {
-        e.stopPropagation();
-        const url = btn.dataset.url;
-        if (url) playAudio(url);
-      });
-    });
-
-    popup.querySelectorAll(".cd-chip").forEach((chip) => {
-      chip.addEventListener("click", (e) => {
-        e.stopPropagation();
-        const w = chip.dataset.word;
+  // Single delegated click handler. Buttons in the rendered HTML declare what
+  // they do via data-action, plus extra data-* attrs the action needs. This
+  // replaces six per-render querySelector/addEventListener pairs and means
+  // adding a new button only requires data-action="…" in the template.
+  function onPopupClick(e) {
+    const btn = e.target.closest("[data-action]");
+    if (!btn) return;
+    switch (btn.dataset.action) {
+      case "close":
+        removePopup();
+        break;
+      case "back": {
+        const prev = history.pop();
+        if (prev) lookup(prev);
+        break;
+      }
+      case "retry":
+        if (currentWord) lookup(currentWord, { skipResolve: !!resolvedFrom });
+        break;
+      case "expand":
+        expanded = !expanded;
+        rerender();
+        break;
+      case "audio":
+        if (btn.dataset.url) playAudio(btn.dataset.url);
+        break;
+      case "lookup": {
+        const w = btn.dataset.word;
         if (!w || w === currentWord) return;
         history.push(currentWord);
         lookup(w);
-      });
-    });
-
-    popup.querySelector(".cd-resolved")?.addEventListener("click", (e) => {
-      e.stopPropagation();
-      const target = e.currentTarget.dataset.word;
-      const mode = e.currentTarget.dataset.mode;
-      if (!target) return;
-      history.push(currentWord);
-      // mode=form  → user wants to see the literal inflected form, skip resolution
-      // mode=lemma → navigate to base word, normal lookup behavior
-      lookup(target, { skipResolve: mode === "form" });
-    });
-
-    const langSel = popup.querySelector(".cd-langselect");
-    if (langSel) {
-      langSel.addEventListener("change", (e) => {
-        e.stopPropagation();
-        selectedLang = langSel.value;
-        storageApi.set({ preferredLanguage: selectedLang }).catch(() => {});
-        rerender();
-      });
-      langSel.addEventListener("mousedown", (e) => e.stopPropagation());
-      langSel.addEventListener("click", (e) => e.stopPropagation());
+        break;
+      }
+      case "form-jump": {
+        const target = btn.dataset.word;
+        if (!target) return;
+        history.push(currentWord);
+        // mode=form  → view the literal inflected form, skip resolution
+        // mode=lemma → navigate to base word, normal lookup behavior
+        lookup(target, { skipResolve: btn.dataset.mode === "form" });
+        break;
+      }
     }
+  }
+
+  function onPopupChange(e) {
+    if (!e.target.classList?.contains("cd-langselect")) return;
+    // Per-lookup override only; do NOT persist. The persistent default lives
+    // in settings.preferredLanguage and is set from the options page.
+    selectedLang = e.target.value;
+    rerender();
   }
 
   function pickInitialLang(wikt) {
@@ -440,7 +424,10 @@
     setHtml(popup, html);
     document.body.appendChild(popup);
     positionPopup(popup, rect);
-    popup.querySelector(".cd-close")?.addEventListener("click", removePopup);
+    // Delegated listeners — attached once; survive rerender() since setHtml()
+    // only replaces children, not the popup element itself.
+    popup.addEventListener("click", onPopupClick);
+    popup.addEventListener("change", onPopupChange);
   }
 
   function positionPopup(popup, rect) {
@@ -496,7 +483,7 @@
       <div class="cd-header">
         ${renderBackBtn()}
         <span class="cd-word">${escapeHtml(word)}</span>
-        <button class="cd-close" aria-label="Close">×</button>
+        <button class="cd-close" data-action="close" aria-label="Close">×</button>
       </div>
       <div class="cd-body cd-loading">Looking up…</div>
     `;
@@ -513,7 +500,7 @@
 
     const footer = isNetwork
       ? `<div class="cd-footer">
-           <button class="cd-retry">Retry</button>
+           <button class="cd-retry" data-action="retry">Retry</button>
            <a class="cd-link" href="https://en.wiktionary.org/wiki/${encodeURIComponent(word)}" target="_blank" rel="noopener">Open in Wiktionary</a>
          </div>`
       : `<div class="cd-footer">
@@ -524,7 +511,7 @@
       <div class="cd-header">
         ${renderBackBtn()}
         <span class="cd-word">${escapeHtml(word)}</span>
-        <button class="cd-close" aria-label="Close">×</button>
+        <button class="cd-close" data-action="close" aria-label="Close">×</button>
       </div>
       ${body}
       ${footer}
@@ -533,15 +520,15 @@
 
   function renderBackBtn() {
     if (!history.length) return "";
-    return `<button class="cd-back" title="Back" aria-label="Back">←</button>`;
+    return `<button class="cd-back" data-action="back" title="Back" aria-label="Back">←</button>`;
   }
 
   function renderResolvedFrom() {
     if (resolvedFrom) {
-      return `<button class="cd-resolved" data-word="${escapeHtml(resolvedFrom)}" data-mode="form" title="View “${escapeHtml(resolvedFrom)}” as its own entry">← ${escapeHtml(resolvedFrom)}</button>`;
+      return `<button class="cd-resolved" data-action="form-jump" data-word="${escapeHtml(resolvedFrom)}" data-mode="form" title="View “${escapeHtml(resolvedFrom)}” as its own entry">← ${escapeHtml(resolvedFrom)}</button>`;
     }
     if (formOfTarget) {
-      return `<button class="cd-resolved" data-word="${escapeHtml(formOfTarget)}" data-mode="lemma" title="View base word “${escapeHtml(formOfTarget)}”">→ ${escapeHtml(formOfTarget)}</button>`;
+      return `<button class="cd-resolved" data-action="form-jump" data-word="${escapeHtml(formOfTarget)}" data-mode="lemma" title="View base word “${escapeHtml(formOfTarget)}”">→ ${escapeHtml(formOfTarget)}</button>`;
     }
     return "";
   }
@@ -609,14 +596,14 @@
         ${renderResolvedFrom()}
         ${phonHtml}
         ${langPickerHtml}
-        <button class="cd-close" aria-label="Close">×</button>
+        <button class="cd-close" data-action="close" aria-label="Close">×</button>
       </div>
       <div class="cd-body">
         ${synAntHtml}
         ${sections}
       </div>
       <div class="cd-footer">
-        <button class="cd-expand">${expandLabel}</button>
+        <button class="cd-expand" data-action="expand">${expandLabel}</button>
         <a class="cd-link" href="https://en.wiktionary.org/wiki/${encodeURIComponent(word)}" target="_blank" rel="noopener">Wiktionary ↗</a>
       </div>
     `;
@@ -648,7 +635,7 @@
     const parts = [];
     if (ipa) parts.push(`<span class="cd-ipa">${escapeHtml(ipa)}</span>`);
     if (audio) {
-      parts.push(`<button class="cd-audio" data-url="${escapeHtml(audio)}" title="Play pronunciation" aria-label="Play pronunciation">🔊</button>`);
+      parts.push(`<button class="cd-audio" data-action="audio" data-url="${escapeHtml(audio)}" title="Play pronunciation" aria-label="Play pronunciation">🔊</button>`);
     }
     return `<span class="cd-phon">${parts.join("")}</span>`;
   }
@@ -689,7 +676,7 @@
 
   function renderChipRow(label, items) {
     const chips = items.map((i) =>
-      `<button class="cd-chip" data-word="${escapeHtml(i)}" title="Look up “${escapeHtml(i)}”">${escapeHtml(i)}</button>`
+      `<button class="cd-chip" data-action="lookup" data-word="${escapeHtml(i)}" title="Look up “${escapeHtml(i)}”">${escapeHtml(i)}</button>`
     ).join("");
     return `
       <div class="cd-chiprow">

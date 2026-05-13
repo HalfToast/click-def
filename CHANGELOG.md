@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.4.1
+
+- New **Default language** setting in the options page. Pick a specific language (~45 options) to always default to it, or leave on "Auto (use page language)" which falls back to the page's `<html lang>`, then English.
+- Fix: the in-popup language picker was silently overwriting the persistent default on every change, so a one-off switch to another language stuck around forever and broke "Auto". The picker is now session-only — it changes the current lookup's display but doesn't update the saved default. To change the default, use the options page.
+- Refactor (with AI): replaced six per-render `querySelector(...).addEventListener(...)` calls with a single delegated click handler on the popup root. Buttons in the rendered HTML now declare their behavior via `data-action="…"`. Adding new buttons no longer requires touching the handler code, and a duplicate `cd-close` binding has been removed.
+
 ## 0.4.0
 
 - **Filter empty definitions and examples.** Wiktionary occasionally returns blank or whitespace-only definition entries (usually sub-sense placeholders) and embedded `<style>` blocks that leaked through as raw CSS text (e.g. `.mw-parser-output .defdate{font-size:smaller}` appearing at the end of a definition). Both are now stripped before rendering, so the numbered list is clean and no orphan bullets appear under examples.
