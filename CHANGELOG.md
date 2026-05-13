@@ -1,9 +1,17 @@
 # Changelog
 
+## 0.3.0
+
+- Added Firefox for Android support. Long-press a word to select it and the popup appears automatically (the desktop double-click still works on devices with a mouse).
+- Responsive popup sizing for small screens: full-width on phones, larger tap targets for buttons and chips.
+- Outside-tap dismissal now works for touch as well as mouse.
+
 ## 0.2.3
+
 - Try lowercase form first when looking up a word, since difficult/rare words are almost always lowercase. Fixes inconsistent results for sentence-initial words.
 
 ## 0.2.2
+
 - Refactored DOM updates to use `DOMParser` instead of `innerHTML`, silencing Mozilla validator warnings.
 - Bumped `strict_min_version` to 142.0 to support the `data_collection_permissions` manifest key.
 - Declared `data_collection_permissions: { required: ["none"] }` to comply with Firefox's new data consent system.

@@ -37,22 +37,50 @@
   let selectedLang = null;
   const history = []; // stack of previous words for back button
 
+  const isTouch = matchMedia("(pointer: coarse)").matches;
+
   document.addEventListener("dblclick", onDblClick, true);
   document.addEventListener("mousedown", onOutsideMouseDown, true);
+  document.addEventListener("touchstart", onOutsideMouseDown, true);
   document.addEventListener("keydown", (e) => {
     if (e.key === "Escape") removePopup();
   });
 
+  // Mobile: long-press selects text and fires selectionchange. Debounce until the
+  // selection stabilizes, then trigger a lookup if it resolves to a single word.
+  if (isTouch) {
+    let selTimer = null;
+    document.addEventListener("selectionchange", () => {
+      clearTimeout(selTimer);
+      selTimer = setTimeout(handleTouchSelection, 450);
+    });
+  }
+
+  function handleTouchSelection() {
+    const popup = document.getElementById(POPUP_ID);
+    if (popup) return; // already showing something
+    const sel = window.getSelection();
+    if (!sel || sel.isCollapsed || sel.rangeCount === 0) return;
+    const text = sel.toString().trim();
+    if (!text || /\s/.test(text)) return; // only single-word selections
+    triggerLookup(sel);
+  }
+
   function onOutsideMouseDown(e) {
     const popup = document.getElementById(POPUP_ID);
-    if (popup && !popup.contains(e.target)) removePopup();
+    if (!popup) return;
+    const target = e.target || (e.touches && e.touches[0]?.target);
+    if (target && !popup.contains(target)) removePopup();
   }
 
   async function onDblClick(e) {
     if (settings.requireModifier && !e.altKey) return;
-
     const sel = window.getSelection();
     if (!sel || sel.isCollapsed) return;
+    triggerLookup(sel);
+  }
+
+  async function triggerLookup(sel) {
     const text = sel.toString().trim();
     if (!text) return;
 

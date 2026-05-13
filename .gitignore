@@ -31,3 +31,4 @@ yarn-error.log*
 *.tmp
 *.ps1
 SUBMISSION.md
+ruvector.db

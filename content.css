@@ -2,7 +2,7 @@
   position: absolute;
   z-index: 2147483647;
   width: 340px;
-  max-width: 90vw;
+  max-width: calc(100vw - 16px);
   background: #ffffff;
   color: #1a1a1a;
   border: 1px solid #d0d7de;
@@ -222,6 +222,22 @@
   font-size: 12px;
 }
 #click-define-popup .cd-link:hover { text-decoration: underline; }
+
+@media (max-width: 480px) {
+  #click-define-popup {
+    width: calc(100vw - 16px);
+    font-size: 14px;
+  }
+  #click-define-popup .cd-body { max-height: 50vh; }
+  #click-define-popup .cd-chip { padding: 4px 10px; font-size: 12px; }
+  #click-define-popup .cd-audio,
+  #click-define-popup .cd-close,
+  #click-define-popup .cd-back,
+  #click-define-popup .cd-expand {
+    padding: 6px 10px;
+    min-height: 32px;
+  }
+}
 
 @media (prefers-color-scheme: dark) {
   #click-define-popup {
