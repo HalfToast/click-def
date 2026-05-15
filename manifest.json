@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "Click Define",
-  "version": "0.4.1",
-  "description": "Double-click any word to see its definition, pronunciation, synonyms, and antonyms in any language.",
+  "version": "0.4.2",
+  "description": "Double-click (or long-press on Android) any word for instant definitions, pronunciation, synonyms, antonyms, and base-word jumps in any language.",
   "author": "HalfToast",
   "homepage_url": "https://github.com/HalfToast/click-def",
   "browser_specific_settings": {
@@ -25,7 +25,8 @@
       "matches": ["<all_urls>"],
       "js": ["content.js"],
       "css": ["content.css"],
-      "run_at": "document_idle"
+      "run_at": "document_idle",
+      "all_frames": true
     }
   ],
   "options_ui": {

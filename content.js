@@ -38,6 +38,7 @@
   let selectedLang = null;
   let resolvedFrom = null;  // we auto-resolved to a lemma; this is the original form
   let formOfTarget = null;  // we're showing a form's entry; this is the lemma it points to
+  let lookupSeq = 0;        // monotonic counter to detect superseded async lookups
   const history = []; // stack of previous words for back button
 
   const isTouch = matchMedia("(pointer: coarse)").matches;
@@ -90,6 +91,9 @@
     const raw = text.split(/\s+/)[0].replace(/^[^\p{L}\p{N}'-]+|[^\p{L}\p{N}'-]+$/gu, "");
     const word = raw.normalize("NFC");
     if (!word) return;
+    // Reject pure-number/punctuation selections (e.g. "2024", "1999") — these
+    // either 404 on Wiktionary or surface the literal page for the number.
+    if (!/\p{L}/u.test(word)) return;
 
     const range = sel.getRangeAt(0);
     lastRect = range.getBoundingClientRect();
@@ -100,6 +104,7 @@
   async function lookup(word, opts = {}) {
     const skipResolve = !!opts.skipResolve;
     const fromForm = opts.fromForm || null;
+    const seq = ++lookupSeq;
 
     currentWord = word;
     currentWiktionary = null;
@@ -119,6 +124,7 @@
     } catch (err) {
       wikt = { error: err.message, network: !!err.network };
     }
+    if (seq !== lookupSeq) return; // superseded by a newer lookup
 
     // Detect inflected forms. Behavior depends on the autoResolveForms setting:
     //   - true  → recurse into the lemma immediately (and show "← form" breadcrumb).
@@ -143,6 +149,8 @@
     ];
 
     const [dict, syns, ants] = await Promise.all(tasks);
+    if (seq !== lookupSeq) return; // superseded
+
     currentDictionary = dict;
     currentSyn = syns || [];
     currentAnt = ants || [];
@@ -165,29 +173,27 @@
   // "of WORD." (or close to it) AND the prefix contains at least one of a known
   // list of grammatical keywords. This is broader and more robust than a single
   // enumerated phrase pattern.
-  const FORM_KEYWORDS = /(?:^|[^\p{L}])(plural|singular|dual|past|present|future|tense|participle|gerund|comparative|superlative|feminine|masculine|neuter|diminutive|augmentative|genitive|accusative|dative|nominative|vocative|locative|instrumental|ablative|ergative|infinitive|imperative|subjunctive|indicative|conditional|optative|imperfect|perfect|pluperfect|preterite|aorist|continuous|progressive|active|passive|reflexive|honorific|polite|inflection|inflected|conjugation|conjugated|misspelling|abbreviation|abbreviated|acronym|initialism|contraction|contracted|romanization|transliteration|romaji|hiragana|katakana|kanji|first|second|third|person|alternative\s+(?:form|spelling|letter[\-‑\s]case)|obsolete\s+(?:form|spelling)|archaic\s+(?:form|spelling)|eye\s+dialect|standard\s+spelling|nonstandard\s+spelling|deprecated\s+(?:form|spelling))(?:$|[^\p{L}])/iu;
+  const FORM_KEYWORDS = /(?:^|[^\p{L}])(plural|singular|dual|past|present|future|tense|participle|gerund|comparative|superlative|feminine|masculine|neuter|diminutive|augmentative|genitive|accusative|dative|nominative|vocative|locative|instrumental|ablative|ergative|infinitive|imperative|subjunctive|indicative|conditional|optative|imperfect|perfect|pluperfect|preterite|aorist|continuous|progressive|active|passive|reflexive|honorific|polite|inflection|inflected|conjugation|conjugated|misspelling|misspelt|abbreviation|abbreviated|acronym|initialism|contraction|contracted|romanization|transliteration|romaji|hiragana|katakana|kanji|first|second|third|person|variant|letter[\-‑\s]case|alternative\s+(?:form|spelling|letter[\-‑\s]case)|obsolete\s+(?:form|spelling)|archaic\s+(?:form|spelling)|eye\s+dialect|standard\s+spelling|nonstandard\s+spelling|deprecated\s+(?:form|spelling))(?:$|[^\p{L}])/iu;
 
   function isFormOfDefinition(text) {
     if (!text) return null;
-    // Strip a leading parenthetical qualifier like "(archaic)" or "(now obsolete)".
-    let t = text.trim().replace(/^\(\s*[^()]+\s*\)\s*/u, "");
-    // Remove trailing punctuation/quotes.
-    t = t.replace(/[.;,:!?\s"'“”]+$/gu, "");
+    // Strip leading parenthetical qualifiers (possibly nested/repeated) like
+    // "(archaic) (now obsolete) Plural of …".
+    let t = text.trim();
+    while (/^\(\s*[^()]+\s*\)\s*/u.test(t)) t = t.replace(/^\(\s*[^()]+\s*\)\s*/u, "");
 
-    // Find the last " of " — the target word follows it.
-    const idx = t.toLowerCase().lastIndexOf(" of ");
-    if (idx < 0) return null;
-    const prefix = t.slice(0, idx);
-    const suffix = t.slice(idx + 4).trim().replace(/^["'“]+|["'”]+$/gu, "");
+    // Find "of <word>" — first occurrence, since form-of definitions start with
+    // the keywords + "of" close to the front. The word may be followed by more
+    // text (parenthetical examples, colons, qualifiers), which we ignore.
+    const m = t.match(/\bof\s+["'“]?([\p{L}][\p{L}'\-]*)["'”]?/iu);
+    if (!m) return null;
+    const prefix = t.slice(0, m.index).trim();
 
-    // Suffix must be a single word (letters, apostrophes, hyphens, CJK, etc).
-    if (!/^[\p{L}][\p{L}'\-]*$/u.test(suffix)) return null;
-    // Prefix should not be implausibly long (real definitions of real words
-    // usually have more content after "of"). Cap at ~80 chars.
-    if (prefix.length > 80) return null;
-    // Prefix must contain at least one grammatical keyword.
+    // Prefix should be short (form-of definitions are pithy) and contain a
+    // grammatical keyword. Reject anything longer than ~60 chars before "of".
+    if (prefix.length === 0 || prefix.length > 60) return null;
     if (!FORM_KEYWORDS.test(prefix)) return null;
-    return suffix;
+    return m[1];
   }
 
   function detectFormOf(wikt) {

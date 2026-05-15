@@ -1,16 +1,19 @@
 # Click Define
 
-A Firefox extension that shows the definition of any word, in any language, when you double-click it.
+A Firefox extension that shows the definition of any word, in any language, when you double-click it. Works on desktop and Firefox for Android.
 
 ## Features
 
-- **Double-click** any word on any page to see its definition.
+- **Double-click** any word on any page to see its definition (long-press on Android).
 - **Multilingual** definitions via Wiktionary (hundreds of languages).
-- **Language picker** in the popup when a word has entries in multiple languages.
+- **Language picker** in the popup when a word has entries in multiple languages. Defaults to the page's language automatically, or pick a persistent default in settings.
 - **Pronunciation** with IPA and an audio button (English).
 - **Synonyms & antonyms** as clickable chips; click one to look it up; ← to go back.
-- **Lemma fallback** finds "running" → "run", "boxes" → "box", "happily" → "happy".
-- **Settings page** for toggles and preferences.
+- **Inflected-form detection** shows a chip jumping you to the base word (`boxes` → `box`, `ran` → `run`, `happier` → `happy`, even `recieve` → `receive` for misspellings). Words with their own meanings ("glasses", "drunk", "data") are left alone. Optionally auto-jump to the lemma instead.
+- **Lemma fallback** for inflected forms with no Wiktionary entry of their own ("happily" → "happy").
+- **Sticky popup** that scrolls with the word it's defining.
+- **Network resilience**: retries transient fetch failures once, and shows a clear retry button if it still fails.
+- **Settings page** for toggles, preferences, and default language.
 - Light + dark mode, smart positioning, `Esc` to dismiss.
 
 ## Install (development)

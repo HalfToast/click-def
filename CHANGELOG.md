@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.4.2
+
+- Fix: form-of detection missed cases where Wiktionary's definition had extra text after the target word ("Plural of theory (collective)", "Simple past of run: a colloquial usage"). Detection now matches the first `of <word>` near the start of the definition instead of requiring the entire suffix to be that word. "theories", "memories", "parties", "lives" → base word chip now appears.
+- Fix: added `variant`, `letter-case`, and `misspelt` to the form-of keyword list so "Variant of color", "Alternative letter-case form of dna", and British "Misspelt of receive" resolve.
+- Fix: race condition when double-clicking a second word before the first lookup finished. Each lookup now carries a sequence id and aborts cleanly if a newer one supersedes it.
+- Fix: extension now runs inside iframes (`all_frames: true` in the manifest), so words inside embedded articles (Medium widgets, comment frames, etc.) are clickable.
+- Fix: pure-number selections like "2024" or "1999" no longer trigger a lookup. The popup now requires at least one letter character in the selection.
+
 ## 0.4.1
 
 - New **Default language** setting in the options page. Pick a specific language (~45 options) to always default to it, or leave on "Auto (use page language)" which falls back to the page's `<html lang>`, then English.
