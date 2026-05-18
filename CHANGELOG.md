@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.4.3
+
+- Fix: "NetworkError when attempting to fetch resource" on strict-CSP sites (WhatsApp Web, GitHub, some banks). Network requests now run in a background script, which isn't subject to the host page's Content-Security-Policy, so lookups work everywhere.
+- Fix: synonym/antonym chips occasionally showed long editorial notes instead of words (e.g. 'these other third-person pronouns (see "Combined forms", …)' when looking up "he"). Chips are now filtered to short, term-like entries. No sentence punctuation, brackets, quotes, or more than three words.
+- The "→ base word" breadcrumb chip now appears whenever *any* definition is an inflected-form pointer, not only when *every* definition is. Words with their own meanings still show their full entry, the chip is just an extra one-click path to the base word (e.g. "rose" shows its noun definition plus a `→ rise` chip). Auto-jump (the optional setting) still requires every definition to be a form-of, so it never pulls you away from a word's own meaning.
+
 ## 0.4.2
 
 - Fix: form-of detection missed cases where Wiktionary's definition had extra text after the target word ("Plural of theory (collective)", "Simple past of run: a colloquial usage"). Detection now matches the first `of <word>` near the start of the definition instead of requiring the entire suffix to be that word. "theories", "memories", "parties", "lives" → base word chip now appears.

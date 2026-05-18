@@ -16,17 +16,15 @@
     autoResolveForms: false
   };
 
-  const storageApi = (typeof browser !== "undefined" ? browser : chrome).storage.sync;
+  const ext = (typeof browser !== "undefined" ? browser : chrome);
+  const storageApi = ext.storage.sync;
   let settings = { ...DEFAULTS };
 
   storageApi.get(DEFAULTS).then((s) => { settings = { ...DEFAULTS, ...s }; });
-  if (typeof browser !== "undefined" || typeof chrome !== "undefined") {
-    const runtime = (typeof browser !== "undefined" ? browser : chrome);
-    runtime.storage.onChanged?.addListener((changes, area) => {
-      if (area !== "sync") return;
-      for (const k in changes) settings[k] = changes[k].newValue;
-    });
-  }
+  ext.storage.onChanged?.addListener((changes, area) => {
+    if (area !== "sync") return;
+    for (const k in changes) settings[k] = changes[k].newValue;
+  });
 
   let currentWord = null;
   let currentWiktionary = null;
@@ -131,11 +129,14 @@
     //   - false → keep showing the form's entry but expose a "→ lemma" chip so the
     //             user can navigate to the base word manually. Default.
     if (!skipResolve && !fromForm && wikt && !wikt.error) {
-      const lemma = detectFormOf(wikt);
+      const strict = detectFormOf(wikt);
+      if (strict && strict.toLowerCase() !== word.toLowerCase() && settings.autoResolveForms) {
+        return lookup(strict, { fromForm: word });
+      }
+      // Show a "→ base word" chip if ANY definition is a form-of pointer, even
+      // when the word also has its own meanings (e.g. "rose" → "rise").
+      const lemma = strict || detectAnyFormOf(wikt);
       if (lemma && lemma.toLowerCase() !== word.toLowerCase()) {
-        if (settings.autoResolveForms) {
-          return lookup(lemma, { fromForm: word });
-        }
         formOfTarget = lemma;
       }
     }
@@ -196,6 +197,10 @@
     return m[1];
   }
 
+  // Strict: lemma only if EVERY non-empty definition in the displayed language
+  // is a form-of pointer to the same base word. Used for the auto-resolve jump,
+  // so we never yank the user away from words that have their own meanings
+  // (e.g. "drunk", "glasses", "rose").
   function detectFormOf(wikt) {
     const lang = pickInitialLang(wikt);
     if (!lang || !wikt[lang]) return null;
@@ -217,6 +222,24 @@
     }
 
     return defCount > 0 ? target : null;
+  }
+
+  // Loose: lemma from the FIRST definition that is a form-of pointer, even if
+  // the word also has its own meanings. Used to offer the "→ base word"
+  // breadcrumb chip — purely additive, never auto-jumps.
+  function detectAnyFormOf(wikt) {
+    const lang = pickInitialLang(wikt);
+    if (!lang || !wikt[lang]) return null;
+
+    for (const entry of wikt[lang]) {
+      for (const d of entry.definitions || []) {
+        const text = stripHtml(d.definition).trim();
+        if (!text) continue;
+        const t = isFormOfDefinition(text);
+        if (t) return t;
+      }
+    }
+    return null;
   }
 
   function rerender() {
@@ -346,17 +369,30 @@
     return [...out];
   }
 
-  // `fetch` throws a TypeError for network-level failures (DNS, offline, dropped
-  // connection, CORS) and not for HTTP error responses. We retry those once after a
-  // brief delay since most are transient.
-  async function fetchWithRetry(url, init) {
+  // Route all network requests through the background script. In Firefox a
+  // content-script fetch() is governed by the host page's CSP (connect-src),
+  // so strict sites (WhatsApp Web, GitHub, some banks) block lookups. The
+  // background page has no such restriction. Returns a normalized result:
+  //   { ok, status, body } on an HTTP response, or
+  //   { error, network }   on a transport-level failure.
+  async function apiFetch(url, init) {
     try {
-      return await fetch(url, init);
+      const r = await ext.runtime.sendMessage({ type: "cd-fetch", url, init });
+      return r || { error: "No response from background", network: true };
     } catch (e) {
-      if (!(e instanceof TypeError)) throw e;
-      await new Promise((r) => setTimeout(r, 400));
-      return fetch(url, init); // second attempt; if it throws, caller handles
+      return { error: (e && e.message) || String(e), network: true };
     }
+  }
+
+  // Retry once after a short delay on transport-level failures (most are
+  // transient: DNS hiccups, dropped connections, brief Wi-Fi blips).
+  async function apiFetchRetry(url, init) {
+    let r = await apiFetch(url, init);
+    if (r && r.network) {
+      await new Promise((res) => setTimeout(res, 400));
+      r = await apiFetch(url, init);
+    }
+    return r;
   }
 
   async function fetchWiktionary(word) {
@@ -364,9 +400,10 @@
     let networkFailed = false;
     const tryVariant = async (v) => {
       const url = `https://en.wiktionary.org/api/rest_v1/page/definition/${encodeURIComponent(v)}`;
-      const res = await fetchWithRetry(url, { headers: { Accept: "application/json" } });
-      if (res.ok) return res.json();
-      if (res.status !== 404) throw new Error(`Lookup failed (${res.status})`);
+      const r = await apiFetchRetry(url, { headers: { Accept: "application/json" } });
+      if (r.network) { networkFailed = true; return null; }
+      if (r.ok) return r.body;
+      if (r.status && r.status !== 404) throw new Error(`Lookup failed (${r.status})`);
       return null;
     };
 
@@ -374,10 +411,7 @@
       try {
         const r = await tryVariant(variant);
         if (r) return r;
-      } catch (e) {
-        lastErr = e;
-        if (e instanceof TypeError) networkFailed = true;
-      }
+      } catch (e) { lastErr = e; }
     }
     // Lemma fallbacks
     for (const lemma of lemmaCandidates(word)) {
@@ -385,10 +419,7 @@
         try {
           const r = await tryVariant(variant);
           if (r) return r;
-        } catch (e) {
-          lastErr = e;
-          if (e instanceof TypeError) networkFailed = true;
-        }
+        } catch (e) { lastErr = e; }
       }
     }
     if (networkFailed) {
@@ -403,24 +434,17 @@
     const candidates = [...caseVariants(word), ...lemmaCandidates(word)];
     for (const variant of candidates) {
       const url = `https://api.dictionaryapi.dev/api/v2/entries/en/${encodeURIComponent(variant)}`;
-      try {
-        const res = await fetchWithRetry(url, { headers: { Accept: "application/json" } });
-        if (res.ok) return res.json();
-      } catch {}
+      const r = await apiFetchRetry(url, { headers: { Accept: "application/json" } });
+      if (r.ok && r.body) return r.body;
     }
     return null;
   }
 
   async function fetchDatamuse(word, rel) {
     const url = `https://api.datamuse.com/words?${rel}=${encodeURIComponent(word.toLowerCase())}&max=20`;
-    try {
-      const res = await fetchWithRetry(url);
-      if (!res.ok) return [];
-      const data = await res.json();
-      return data.map((d) => d.word).filter(Boolean);
-    } catch {
-      return [];
-    }
+    const r = await apiFetchRetry(url);
+    if (r.ok && Array.isArray(r.body)) return r.body.map((d) => d.word).filter(Boolean);
+    return [];
   }
 
   function showPopup(rect, html) {
@@ -671,13 +695,28 @@
 
     const limit = expanded ? 30 : 8;
     const blocks = [];
-    if (settings.showSynonyms && synonyms.size) {
-      blocks.push(renderChipRow("Synonyms", [...synonyms].slice(0, limit)));
+    const syn = [...synonyms].filter(isCleanTerm);
+    const ant = [...antonyms].filter(isCleanTerm);
+    if (settings.showSynonyms && syn.length) {
+      blocks.push(renderChipRow("Synonyms", syn.slice(0, limit)));
     }
-    if (settings.showAntonyms && antonyms.size) {
-      blocks.push(renderChipRow("Antonyms", [...antonyms].slice(0, limit)));
+    if (settings.showAntonyms && ant.length) {
+      blocks.push(renderChipRow("Antonyms", ant.slice(0, limit)));
     }
     return blocks.join("");
+  }
+
+  // The Free Dictionary API occasionally stores editorial notes in its
+  // synonyms/antonyms arrays (e.g. 'these other third-person pronouns (see
+  // "Combined forms", …)'). Keep only entries that look like actual terms:
+  // short, few words, no sentence punctuation, brackets, or quotes.
+  function isCleanTerm(s) {
+    if (typeof s !== "string") return false;
+    const t = s.trim();
+    if (t.length < 1 || t.length > 30) return false;
+    if (t.split(/\s+/).length > 3) return false;          // at most a short phrase
+    if (/[(){}\[\]"“”;:]|see\s|\.\.\.|—|–/i.test(t)) return false;
+    return true;
   }
 
   function renderChipRow(label, items) {

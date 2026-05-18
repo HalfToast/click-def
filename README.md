@@ -33,7 +33,8 @@ A Firefox extension that shows the definition of any word, in any language, when
 ## Files
 
 - [manifest.json](manifest.json) - MV3 manifest (Firefox-compatible)
-- [content.js](content.js) - double-click handler, fetching, popup rendering
+- [background.js](background.js) - performs network requests (bypasses page CSP)
+- [content.js](content.js) - double-click handler, popup rendering, messaging
 - [content.css](content.css) - popup styles
 - [options.html](options.html), [options.css](options.css), [options.js](options.js) - settings page
 - [icon.svg](icon.svg) - toolbar icon

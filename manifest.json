@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Click Define",
-  "version": "0.4.2",
+  "version": "0.4.3",
   "description": "Double-click (or long-press on Android) any word for instant definitions, pronunciation, synonyms, antonyms, and base-word jumps in any language.",
   "author": "HalfToast",
   "homepage_url": "https://github.com/HalfToast/click-def",
@@ -20,6 +20,9 @@
     "https://api.dictionaryapi.dev/*",
     "https://api.datamuse.com/*"
   ],
+  "background": {
+    "scripts": ["background.js"]
+  },
   "content_scripts": [
     {
       "matches": ["<all_urls>"],
