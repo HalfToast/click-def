@@ -9,12 +9,24 @@ const DEFAULTS = {
   maxShortDefs: 2,
   useFreeDictionary: true,
   autoResolveForms: false,
+  theme: "auto",
   preferredLanguage: "auto"
 };
 
 const FIELDS = Object.keys(DEFAULTS);
 
 const api = (typeof browser !== "undefined" ? browser : chrome).storage.sync;
+
+// Stamped before the first paint with the system preference, then corrected
+// once the (async) stored setting arrives, so the page doesn't flash the wrong
+// colours on the way in.
+function applyTheme(pref) {
+  const dark = pref === "dark" ||
+    (pref !== "light" && matchMedia("(prefers-color-scheme: dark)").matches);
+  document.documentElement.classList.toggle("cd-theme-dark", dark);
+  document.documentElement.classList.toggle("cd-theme-light", !dark);
+}
+applyTheme(DEFAULTS.theme);
 
 function load() {
   api.get(DEFAULTS).then((settings) => {
@@ -24,6 +36,7 @@ function load() {
       if (el.type === "checkbox") el.checked = !!settings[key];
       else el.value = settings[key];
     }
+    applyTheme(settings.theme);
   });
 }
 
@@ -36,7 +49,10 @@ function save() {
     else if (el.type === "number") settings[key] = Number(el.value) || DEFAULTS[key];
     else settings[key] = el.value;
   }
-  api.set(settings).then(() => flash("Saved"));
+  api.set(settings).then(() => {
+    applyTheme(settings.theme);
+    flash("Saved");
+  });
 }
 
 function reset() {

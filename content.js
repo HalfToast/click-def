@@ -12,6 +12,7 @@
     autoPlayAudio: false,
     maxShortDefs: 2,
     useFreeDictionary: true,
+    theme: "auto",
     preferredLanguage: "auto",
     autoResolveForms: false
   };
@@ -29,6 +30,7 @@
   let currentWord = null;
   let currentWiktionary = null;
   let currentDictionary = null;
+  let currentPronunciation = null; // Wiktionary IPA/audio, keyed by language code
   let currentSyn = [];
   let currentAnt = [];
   let expanded = false;
@@ -37,6 +39,8 @@
   let resolvedFrom = null;  // we auto-resolved to a lemma; this is the original form
   let formOfTarget = null;  // we're showing a form's entry; this is the lemma it points to
   let lookupSeq = 0;        // monotonic counter to detect superseded async lookups
+  let autoPlayed = false;   // guards against two audio sources both autoplaying
+  let resolvedTitle = null; // the page title fetchWiktionary actually matched
   const history = []; // stack of previous words for back button
 
   const isTouch = matchMedia("(pointer: coarse)").matches;
@@ -107,6 +111,8 @@
     currentWord = word;
     currentWiktionary = null;
     currentDictionary = null;
+    currentPronunciation = null;
+    autoPlayed = false;
     currentSyn = [];
     currentAnt = [];
     expanded = !!settings.autoExpand;
@@ -142,27 +148,54 @@
     }
 
     currentWiktionary = wikt;
-
-    const tasks = [
-      settings.useFreeDictionary ? fetchFreeDictionary(word).catch(() => null) : Promise.resolve(null),
-      (settings.showSynonyms ? fetchDatamuse(word, "rel_syn") : Promise.resolve([])).catch(() => []),
-      (settings.showAntonyms ? fetchDatamuse(word, "rel_ant") : Promise.resolve([])).catch(() => [])
-    ];
-
-    const [dict, syns, ants] = await Promise.all(tasks);
-    if (seq !== lookupSeq) return; // superseded
-
-    currentDictionary = dict;
-    currentSyn = syns || [];
-    currentAnt = ants || [];
     selectedLang = pickInitialLang(wikt);
 
+    // Paint the definition the moment Wiktionary answers, before the enrichment
+    // APIs are consulted. Those only contribute IPA, an audio button and
+    // syn/ant chips, and every render path already handles their absence — so
+    // holding the popup on a spinner until the slowest third party replies (or
+    // a dead one exhausts its budget) costs the user the entire feature to save
+    // a single repaint. Each enrichment repaints independently as it lands.
     rerender();
 
-    if (settings.autoPlayAudio) {
-      const audioUrl = firstAudioUrl(currentDictionary);
-      if (audioUrl) playAudio(audioUrl);
+    const enrich = [];
+
+    if (settings.showPronunciation) {
+      const title = resolvedTitle || word;
+      enrich.push(fetchPronunciation(title).catch(() => null).then((pron) => {
+        if (seq !== lookupSeq || !pron) return;
+        currentPronunciation = pron;
+        rerender();
+        maybeAutoPlay(pronAudioUrl(pronFor(pron, selectedLang, langNameFor(wikt, selectedLang))));
+      }));
     }
+
+    if (settings.useFreeDictionary) {
+      enrich.push(fetchFreeDictionary(word).catch(() => null).then((dict) => {
+        if (seq !== lookupSeq || !dict) return; // superseded, or nothing to add
+        currentDictionary = dict;
+        rerender();
+        maybeAutoPlay(firstAudioUrl(dict));
+      }));
+    }
+
+    if (settings.showSynonyms) {
+      enrich.push(fetchDatamuse(word, "rel_syn").catch(() => []).then((syns) => {
+        if (seq !== lookupSeq || !syns.length) return;
+        currentSyn = syns;
+        rerender();
+      }));
+    }
+
+    if (settings.showAntonyms) {
+      enrich.push(fetchDatamuse(word, "rel_ant").catch(() => []).then((ants) => {
+        if (seq !== lookupSeq || !ants.length) return;
+        currentAnt = ants;
+        rerender();
+      }));
+    }
+
+    await Promise.all(enrich);
   }
 
   // Returns the lemma if every definition in the language we'd display is a
@@ -369,15 +402,23 @@
     return [...out];
   }
 
+  // Per-request timeout budgets, in ms. Wiktionary is the critical path and
+  // answers in well under a second in practice, so 8s is pure headroom for a
+  // bad connection. The enrichment APIs only decorate a definition that is
+  // already on screen, so they get a tighter budget — nobody benefits from
+  // waiting longer than that for an IPA string.
+  const WIKT_TIMEOUT_MS = 8000;
+  const ENRICH_TIMEOUT_MS = 4000;
+
   // Route all network requests through the background script. In Firefox a
   // content-script fetch() is governed by the host page's CSP (connect-src),
   // so strict sites (WhatsApp Web, GitHub, some banks) block lookups. The
   // background page has no such restriction. Returns a normalized result:
   //   { ok, status, body } on an HTTP response, or
   //   { error, network }   on a transport-level failure.
-  async function apiFetch(url, init) {
+  async function apiFetch(url, init, timeoutMs) {
     try {
-      const r = await ext.runtime.sendMessage({ type: "cd-fetch", url, init });
+      const r = await ext.runtime.sendMessage({ type: "cd-fetch", url, init, timeoutMs });
       return r || { error: "No response from background", network: true };
     } catch (e) {
       return { error: (e && e.message) || String(e), network: true };
@@ -385,12 +426,14 @@
   }
 
   // Retry once after a short delay on transport-level failures (most are
-  // transient: DNS hiccups, dropped connections, brief Wi-Fi blips).
-  async function apiFetchRetry(url, init) {
-    let r = await apiFetch(url, init);
-    if (r && r.network) {
+  // transient: DNS hiccups, dropped connections, brief Wi-Fi blips). Timeouts
+  // are deliberately excluded: the budget has already elapsed once, so a second
+  // attempt against a stalled host only doubles the wait before the same result.
+  async function apiFetchRetry(url, init, timeoutMs) {
+    let r = await apiFetch(url, init, timeoutMs);
+    if (r && r.network && !r.timeout) {
       await new Promise((res) => setTimeout(res, 400));
-      r = await apiFetch(url, init);
+      r = await apiFetch(url, init, timeoutMs);
     }
     return r;
   }
@@ -398,11 +441,12 @@
   async function fetchWiktionary(word) {
     let lastErr;
     let networkFailed = false;
+    resolvedTitle = null;
     const tryVariant = async (v) => {
       const url = `https://en.wiktionary.org/api/rest_v1/page/definition/${encodeURIComponent(v)}`;
-      const r = await apiFetchRetry(url, { headers: { Accept: "application/json" } });
+      const r = await apiFetchRetry(url, { headers: { Accept: "application/json" } }, WIKT_TIMEOUT_MS);
       if (r.network) { networkFailed = true; return null; }
-      if (r.ok) return r.body;
+      if (r.ok) { resolvedTitle = v; return r.body; }
       if (r.status && r.status !== 404) throw new Error(`Lookup failed (${r.status})`);
       return null;
     };
@@ -430,19 +474,237 @@
     throw lastErr || new Error("No definition found.");
   }
 
+  // Enrichment only: IPA and audio. Walks spelling/case variants, but stops at
+  // the first failure that isn't a plain 404. A 404 means "that variant isn't a
+  // word, try the next one"; a timeout, 5xx or transport error means the host
+  // itself is unhealthy, and the remaining variants would each pay the full
+  // budget again to learn the same thing. ("running" generates six candidates,
+  // which is six serial timeouts against a dead host.)
   async function fetchFreeDictionary(word) {
     const candidates = [...caseVariants(word), ...lemmaCandidates(word)];
     for (const variant of candidates) {
       const url = `https://api.dictionaryapi.dev/api/v2/entries/en/${encodeURIComponent(variant)}`;
-      const r = await apiFetchRetry(url, { headers: { Accept: "application/json" } });
+      const r = await apiFetchRetry(url, { headers: { Accept: "application/json" } }, ENRICH_TIMEOUT_MS);
       if (r.ok && r.body) return r.body;
+      if (r.ok) continue;                // healthy host, unusable body — next variant
+      if (r.status !== 404) return null; // unhealthy host — stop paying the budget
     }
     return null;
   }
 
+  // Pronunciation lives in the page's raw wikitext rather than in the definition
+  // REST response, so it costs a second request (~85KB for an entry the size of
+  // "box"). Cached per page title so language switches, the back button and
+  // re-lookups are free, and only requested when the user wants it shown.
+  const PRON_CACHE = new Map();
+  const PRON_CACHE_MAX = 50;
+
+  async function fetchPronunciation(title) {
+    const key = title.toLowerCase();
+    if (PRON_CACHE.has(key)) return PRON_CACHE.get(key);
+
+    const url = `https://en.wiktionary.org/w/api.php?action=parse&page=${encodeURIComponent(title)}` +
+      `&prop=wikitext&format=json&formatversion=2&redirects=1`;
+    const r = await apiFetchRetry(url, { headers: { Accept: "application/json" } }, ENRICH_TIMEOUT_MS);
+    // A missing page answers 200 with an { error } body and no `parse`.
+    if (!r.ok || !r.body || !r.body.parse) return null;
+
+    const pron = parsePronunciation(r.body.parse.wikitext);
+    await fillGeneratedIpa(title, r.body.parse.wikitext, pron);
+
+    if (PRON_CACHE.size >= PRON_CACHE_MAX) PRON_CACHE.delete(PRON_CACHE.keys().next().value);
+    PRON_CACHE.set(key, pron);
+    return pron;
+  }
+
+  // Wiktionary marks pronunciation up as {{IPA|<lang>|/…/|a=RP}} and
+  // {{audio|<lang>|<Commons file>|a=US}}. Results are indexed under both the
+  // template's language code and the enclosing "==Language==" heading, because
+  // the definition REST API and the wikitext don't always agree on how to name a
+  // language: the API files anything without a short code into a single "other"
+  // bucket (German on "Katze", Old French on "chien"), and in those cases the
+  // heading is the only thing the two sides share. {{IPAchar|…}} is skipped — it
+  // carries no language tag and marks up inline phonetic mentions in
+  // etymologies, not the headword's own pronunciation.
+  // Returns { byCode: { de: {ipa, audio} }, byName: { german: {ipa, audio} } }.
+  function parsePronunciation(wikitext) {
+    const pron = { byCode: {}, byName: {} };
+    for (const section of languageSections(wikitext)) {
+      for (const { name, params } of pronunciationTemplates(section.text)) {
+        const positional = params.filter((p) => !p.includes("="));
+        const lang = (positional[0] || "").trim().toLowerCase();
+        if (!/^[a-z]{2,3}(-[a-z0-9]+)*$/.test(lang)) continue;
+
+        // Accent labels link their parts: "a=<<Canada>> (<<Shawinigan>>)".
+        const accentParam = params.find((p) => /^\s*a\s*=/.test(p));
+        const accent = accentParam
+          ? accentParam.replace(/^\s*a\s*=/, "").replace(/<<|>>/g, "").trim()
+          : "";
+
+        for (const raw of positional.slice(1)) {
+          const value = raw.trim();
+          if (!value) continue;
+          if (name === "ipa") {
+            addPron(pron, lang, section.name, "ipa", { text: value, accent });
+          } else {
+            addPron(pron, lang, section.name, "audio", { file: value, accent });
+            break; // one file per {{audio}}
+          }
+        }
+      }
+    }
+    return pron;
+  }
+
+  function addPron(pron, lang, sectionName, kind, value) {
+    const at = (map, key) => (map[key] || (map[key] = { ipa: [], audio: [] }));
+    at(pron.byCode, lang)[kind].push(value);
+    if (sectionName) at(pron.byName, sectionName.toLowerCase())[kind].push(value);
+  }
+
+  // Splits a page on its "==Language==" headings, leaving the deeper
+  // "===Pronunciation===" ones inside the section they belong to.
+  function languageSections(wikitext) {
+    const out = [];
+    if (!wikitext) return out;
+    const re = /^==([^=\n][^\n]*?)==[ \t]*$/gm;
+    let m, prev = null;
+    while ((m = re.exec(wikitext))) {
+      if (prev) out.push({ name: prev.name, text: wikitext.slice(prev.start, m.index) });
+      prev = { name: m[1].trim(), start: re.lastIndex };
+    }
+    if (prev) out.push({ name: prev.name, text: wikitext.slice(prev.start) });
+    // A fragment with no language heading is still worth parsing; the templates
+    // carry their own language codes, only the byName index goes unfilled.
+    if (!out.length) out.push({ name: "", text: wikitext });
+    return out;
+  }
+
+  // Returns the whole {{…}} starting at `i`, braces balanced.
+  function rawTemplateAt(text, i) {
+    let depth = 0;
+    for (let j = i; j < text.length; ) {
+      if (text.startsWith("{{", j)) { depth++; j += 2; continue; }
+      if (text.startsWith("}}", j)) { depth--; j += 2; if (!depth) return text.slice(i, j); continue; }
+      j++;
+    }
+    return null;
+  }
+
+  // Finds {{IPA|…}} / {{audio|…}} and splits their parameters on pipes at brace
+  // depth zero, so a nested template or a [[link|with a pipe]] can't chop a
+  // parameter in half. Scanning only from candidate matches keeps this off the
+  // several thousand unrelated templates on a large Wiktionary page.
+  function pronunciationTemplates(text) {
+    const found = [];
+    const starts = /\{\{\s*(IPA|audio)\s*\|/gi;
+    let m;
+    while ((m = starts.exec(text))) {
+      let depth = 0, link = 0, buf = "", j = m.index;
+      const parts = [];
+      while (j < text.length) {
+        if (text.startsWith("{{", j)) { depth++; if (depth > 1) buf += "{{"; j += 2; continue; }
+        if (text.startsWith("}}", j)) { depth--; j += 2; if (!depth) break; buf += "}}"; continue; }
+        if (text.startsWith("[[", j)) { link++; buf += "[["; j += 2; continue; }
+        if (text.startsWith("]]", j)) { link--; buf += "]]"; j += 2; continue; }
+        if (text[j] === "|" && depth === 1 && !link) { parts.push(buf); buf = ""; j++; continue; }
+        buf += text[j++];
+      }
+      if (depth) continue; // unterminated template — skip it
+      parts.push(buf);
+      found.push({ name: (parts.shift() || "").trim().toLowerCase(), params: parts });
+      starts.lastIndex = j;
+    }
+    return found;
+  }
+
+  // Plenty of languages never spell their IPA out in the wikitext: they use a
+  // generator template — {{es-pr}}, {{fr-IPA}}, {{pt-IPA}}, {{la-IPA|casa}} —
+  // that derives the transcription from the spelling when the page is rendered.
+  // Those cover major languages (French, Spanish, Portuguese, Catalan, Czech),
+  // so skipping them would leave the multilingual promise half-kept. The server
+  // will render a wikitext snippet on demand, so the generators go back in one
+  // small request (~1-5KB) separated by sentinels that survive rendering, which
+  // is what keeps each result attributed to its section. `title` matters: the
+  // generators derive the transcription from the page name.
+  const PRON_SENTINEL = "CDLANG";
+
+  async function fillGeneratedIpa(title, wikitext, pron) {
+    const pending = [];
+    for (const section of languageSections(wikitext)) {
+      const existing = pron.byName[section.name.toLowerCase()];
+      if (existing && existing.ipa.length) continue; // already spelled out
+      const m = /\{\{\s*([a-z]{2,3}(?:-[a-z0-9]+)*)-(?:IPA|pr|pron)\s*[|}]/i.exec(section.text);
+      if (!m) continue;
+      const tpl = rawTemplateAt(section.text, m.index);
+      if (tpl) pending.push({ name: section.name, lang: m[1].toLowerCase(), tpl });
+    }
+    if (!pending.length) return;
+
+    const blob = pending.map((p, i) => `${PRON_SENTINEL}:${i}:\n${p.tpl}`).join("\n");
+    if (blob.length > 2000) return; // pathological entry — not worth the round-trip
+
+    const url = `https://en.wiktionary.org/w/api.php?action=parse` +
+      `&text=${encodeURIComponent(blob)}&title=${encodeURIComponent(title)}` +
+      `&prop=text&contentmodel=wikitext&format=json&formatversion=2`;
+    const r = await apiFetchRetry(url, { headers: { Accept: "application/json" } }, ENRICH_TIMEOUT_MS);
+    const html = r.ok && r.body && r.body.parse && r.body.parse.text;
+    if (!html) return;
+
+    const chunks = String(html).split(new RegExp(`${PRON_SENTINEL}:(\\d+):`));
+    for (let i = 1; i < chunks.length; i += 2) {
+      const target = pending[Number(chunks[i])];
+      if (!target) continue;
+      const seg = chunks[i + 1];
+      let m;
+
+      const ipaRe = /class="[^"]*\bIPA\b[^"]*"[^>]*>([^<]+)</gi;
+      while ((m = ipaRe.exec(seg))) {
+        const text = stripHtml(m[1]);
+        // Generators also emit rhyme fragments ("-asa") and homophone links;
+        // a real transcription is always delimited by / / or [ ].
+        if (/^[/[].+[/\]]$/.test(text)) addPron(pron, target.lang, target.name, "ipa", { text, accent: "" });
+      }
+      // Some generators carry their own recordings instead of a sibling
+      // {{audio}} — {{es-pr}} embeds them as <audio:…> parameters — and those
+      // only become visible once rendered, as File: links.
+      const fileRe = /title="File:([^"]+\.(?:oga|ogg|wav|mp3|flac))"/gi;
+      while ((m = fileRe.exec(seg))) {
+        addPron(pron, target.lang, target.name, "audio", { file: stripHtml(m[1]), accent: "" });
+      }
+    }
+  }
+
+  // The entry on screen is identified by a REST language key and a display name.
+  // Either can be the one that matches, so try the code and fall back to the
+  // heading — the REST "other" bucket has no usable code at all.
+  function pronFor(pron, lang, langName) {
+    if (!pron) return null;
+    return (lang && pron.byCode[lang]) ||
+           (langName && pron.byName[String(langName).toLowerCase()]) || null;
+  }
+
+  function langNameFor(wikt, lang) {
+    const entries = wikt && !wikt.error ? wikt[lang] : null;
+    return (entries && entries[0] && entries[0].language) || "";
+  }
+
+  // Special:FilePath redirects to the file's real upload.wikimedia.org URL. That
+  // saves both an extra API round-trip and the MD5 path derivation Commons would
+  // otherwise need, and keeps the URL on a host the manifest already lists.
+  function commonsAudioUrl(file) {
+    return `https://en.wiktionary.org/wiki/Special:FilePath/${encodeURIComponent(file.replace(/ /g, "_"))}`;
+  }
+
+  function pronAudioUrl(entry) {
+    const file = entry && entry.audio[0] && entry.audio[0].file;
+    return file ? commonsAudioUrl(file) : null;
+  }
+
+
   async function fetchDatamuse(word, rel) {
     const url = `https://api.datamuse.com/words?${rel}=${encodeURIComponent(word.toLowerCase())}&max=20`;
-    const r = await apiFetchRetry(url);
+    const r = await apiFetchRetry(url, undefined, ENRICH_TIMEOUT_MS);
     if (r.ok && Array.isArray(r.body)) return r.body.map((d) => d.word).filter(Boolean);
     return [];
   }
@@ -451,6 +713,7 @@
     removePopup();
     const popup = document.createElement("div");
     popup.id = POPUP_ID;
+    applyTheme(popup);
     setHtml(popup, html);
     document.body.appendChild(popup);
     positionPopup(popup, rect);
@@ -458,6 +721,17 @@
     // only replaces children, not the popup element itself.
     popup.addEventListener("click", onPopupClick);
     popup.addEventListener("change", onPopupChange);
+  }
+
+  // "auto" is resolved here rather than in CSS. The popup element is created by
+  // this script, so stamping the resolved class lets the dark rules live in one
+  // block instead of being duplicated across a media query and an override.
+  function applyTheme(popup) {
+    const pref = settings.theme;
+    const dark = pref === "dark" ||
+      (pref !== "light" && matchMedia("(prefers-color-scheme: dark)").matches);
+    popup.classList.toggle("cd-theme-dark", dark);
+    popup.classList.toggle("cd-theme-light", !dark);
   }
 
   function positionPopup(popup, rect) {
@@ -504,6 +778,14 @@
 
   function playAudio(url) {
     try { new Audio(url).play().catch(() => {}); } catch {}
+  }
+
+  // Wiktionary and the Free Dictionary API can both supply audio and resolve
+  // independently, so autoplay goes to whichever lands first, once per lookup.
+  function maybeAutoPlay(url) {
+    if (!settings.autoPlayAudio || !url || autoPlayed) return;
+    autoPlayed = true;
+    playAudio(url);
   }
 
   // ---------- rendering ----------
@@ -571,17 +853,22 @@
       return renderError(word, wikt?.error || "No definition found.", !!wikt?.network);
     }
 
-    const phonHtml = settings.showPronunciation ? renderPhonetics(currentDictionary) : "";
-    const synAntHtml = renderSynAnt();
-
     const allLangs = Object.keys(wikt);
     if (!allLangs.length) return renderError(word, "No definitions found.");
 
     const activeLang = selectedLang && wikt[selectedLang] ? selectedLang : (allLangs.includes("en") ? "en" : allLangs[0]);
+
     const langPickerHtml = renderLangPicker(wikt, activeLang);
 
     const entries = wikt[activeLang];
     const langName = entries[0]?.language || activeLang;
+
+    // Phonetics are language-scoped, so they need the active language resolved
+    // first — by code and by display name, since the two can disagree.
+    const phonHtml = settings.showPronunciation
+      ? renderPhonetics(currentDictionary, currentPronunciation, activeLang, langName)
+      : "";
+    const synAntHtml = renderSynAnt();
     const posBlocks = entries.map((entry) => {
       // Wiktionary occasionally returns empty or whitespace-only entries (header
       // rows, sub-sense placeholders). Drop them before slicing so the user sees
@@ -655,15 +942,33 @@
     return `<select class="cd-langselect" title="Definition language" aria-label="Language">${opts}</select>`;
   }
 
-  function renderPhonetics(dict) {
-    if (!Array.isArray(dict) || !dict.length) return "";
-    const phonetics = dict[0].phonetics || [];
-    const ipa = dict[0].phonetic || phonetics.find((p) => p.text)?.text || "";
-    const audio = phonetics.find((p) => p.audio)?.audio || "";
+  // Prefers Wiktionary's own pronunciation, which is scoped to the language on
+  // screen. The Free Dictionary payload is the fallback and is only consulted
+  // for English — its data is English-only, so showing it beside a German or
+  // French entry would attach the wrong pronunciation to the word.
+  function renderPhonetics(dict, pron, lang, langName) {
+    let ipa = "";
+    let audio = "";
+    let accent = "";
+
+    const entry = pronFor(pron, lang, langName);
+    if (entry) {
+      if (entry.ipa[0]) { ipa = entry.ipa[0].text; accent = entry.ipa[0].accent || ""; }
+      if (entry.audio[0]) audio = commonsAudioUrl(entry.audio[0].file);
+    }
+
+    if (!ipa && !audio && (!lang || lang === "en") && Array.isArray(dict) && dict.length) {
+      const phonetics = dict[0].phonetics || [];
+      ipa = dict[0].phonetic || phonetics.find((p) => p.text)?.text || "";
+      audio = phonetics.find((p) => p.audio)?.audio || "";
+    }
     if (!ipa && !audio) return "";
 
     const parts = [];
-    if (ipa) parts.push(`<span class="cd-ipa">${escapeHtml(ipa)}</span>`);
+    if (ipa) {
+      const title = accent ? ` title="${escapeHtml(accent)}"` : "";
+      parts.push(`<span class="cd-ipa"${title}>${escapeHtml(ipa)}</span>`);
+    }
     if (audio) {
       parts.push(`<button class="cd-audio" data-action="audio" data-url="${escapeHtml(audio)}" title="Play pronunciation" aria-label="Play pronunciation">🔊</button>`);
     }

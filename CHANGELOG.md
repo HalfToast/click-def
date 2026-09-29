@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.5.0
+
+- **Pronunciation in every language.** IPA and audio now come from Wiktionary itself rather than the English-only Free Dictionary API, so they follow whichever language the popup is showing: `Katze` → `/ˈkatsə/`, `chien` → `/ʃjẽ/`, `livro` → `[ˈli.vɾʷ]`. Switching language with the popup picker updates the pronunciation instantly, with no extra request. Many languages don't spell their IPA out in the page source but generate it from the spelling (`{{es-pr}}`, `{{fr-IPA}}`, `{{pt-IPA}}`); those are resolved too, so Spanish, French, Portuguese, Catalan and Czech work as well. Accent labels ("RP", "US", "Latin America") appear as a tooltip on the transcription. The Free Dictionary API is still used as an English fallback.
+- **Theme setting.** New **Appearance → Theme** option: "Auto (match system)", "Light", or "Dark". Auto is the default and matches the previous behavior, following your system setting; the other two pin the popup to one theme regardless of it. The choice applies to the settings page as well.
+- **Definitions no longer wait for the slowest source.** The popup used to render only once every API had answered, so a single slow source held up the entire lookup. Wiktionary's definition is now painted as soon as it arrives, and pronunciation and synonym/antonym chips fill in behind it as they land. Measured against the ongoing `api.dictionaryapi.dev` outage, this took "perambulate" from 59.4 s to 89 ms.
+- Added a unit test suite covering the parsing that has historically regressed: inflected-form detection, case and lemma candidates, synonym-chip filtering, pronunciation template parsing, theme resolution, and settings/control parity. Runs on Node's built-in test runner with no dependencies and no build step (`node --test test/*.test.mjs`), and stubs every API response so it never touches the network.
+- Fix: a stalled source can no longer hang a lookup. `api.dictionaryapi.dev` has spent over a month serving ~20-second responses (and HTTP 522s) from a dead origin behind its CDN. Every request now carries a timeout - 8 s for definitions, 4 s for the extras - and a lookup no longer retries spelling variants against a host that has already proven unhealthy. "running" previously generated six serial 20-second requests to it.
+
 ## 0.4.3
 
 - Fix: "NetworkError when attempting to fetch resource" on strict-CSP sites (WhatsApp Web, GitHub, some banks). Network requests now run in a background script, which isn't subject to the host page's Content-Security-Policy, so lookups work everywhere.

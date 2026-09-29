@@ -123,18 +123,22 @@ button.secondary:hover { background: #f6f8fa; }
 }
 .status.show { opacity: 1; }
 
-@media (prefers-color-scheme: dark) {
-  body { background: #1a1a1a; color: #e6e6e6; }
-  section { background: #2a2a2a; border-color: #3a3a3a; }
-  h1 { color: #58a6ff; }
-  .subtitle, h2, .hint { color: #9ba3ad; }
-  .field input[type="number"],
-  .field select {
-    background: #1e1e1e; color: #e6e6e6; border-color: #3a3a3a;
-  }
-  kbd { background: #1e1e1e; border-color: #3a3a3a; color: #e6e6e6; }
-  button.secondary {
-    background: #2a2a2a; color: #e6e6e6; border-color: #3a3a3a;
-  }
-  button.secondary:hover { background: #333; }
+/* Dark theme. options.js resolves the "auto" setting against
+   prefers-color-scheme and stamps an explicit cd-theme-light / cd-theme-dark
+   class on <html> synchronously, before the page paints - so these rules live
+   in one place rather than being duplicated across a media query and a class. */
+html.cd-theme-dark body { background: #1a1a1a; color: #e6e6e6; }
+html.cd-theme-dark section { background: #2a2a2a; border-color: #3a3a3a; }
+html.cd-theme-dark h1 { color: #58a6ff; }
+html.cd-theme-dark .subtitle,
+html.cd-theme-dark h2,
+html.cd-theme-dark .hint { color: #9ba3ad; }
+html.cd-theme-dark .field input[type="number"],
+html.cd-theme-dark .field select {
+  background: #1e1e1e; color: #e6e6e6; border-color: #3a3a3a;
 }
+html.cd-theme-dark kbd { background: #1e1e1e; border-color: #3a3a3a; color: #e6e6e6; }
+html.cd-theme-dark button.secondary {
+  background: #2a2a2a; color: #e6e6e6; border-color: #3a3a3a;
+}
+html.cd-theme-dark button.secondary:hover { background: #333; }

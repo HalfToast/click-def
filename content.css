@@ -285,59 +285,61 @@
   }
 }
 
-@media (prefers-color-scheme: dark) {
-  #click-define-popup {
-    background: #1e1e1e;
-    color: #e6e6e6;
-    border-color: #3a3a3a;
-  }
-  #click-define-popup .cd-header,
-  #click-define-popup .cd-footer {
-    background: #2a2a2a;
-    border-color: #3a3a3a;
-  }
-  #click-define-popup .cd-word { color: #58a6ff; }
-  #click-define-popup .cd-close { color: #9ba3ad; }
-  #click-define-popup .cd-close:hover { color: #fff; }
-  #click-define-popup .cd-lang,
-  #click-define-popup .cd-pos,
-  #click-define-popup .cd-loading,
-  #click-define-popup .cd-ipa,
-  #click-define-popup .cd-chiplabel,
-  #click-define-popup .cd-example { color: #9ba3ad; }
-  #click-define-popup .cd-lang-block + .cd-lang-block,
-  #click-define-popup .cd-chiprow,
-  #click-define-popup .cd-examples { border-color: #3a3a3a; }
-  #click-define-popup .cd-link { color: #58a6ff; }
-  #click-define-popup .cd-chip {
-    background: #0d3a66;
-    color: #79c0ff;
-  }
-  #click-define-popup .cd-chip:hover {
-    background: #155a99;
-    border-color: #58a6ff;
-  }
-  #click-define-popup .cd-back {
-    border-color: #3a3a3a;
-    color: #9ba3ad;
-  }
-  #click-define-popup .cd-back:hover { background: #333; color: #fff; }
-  #click-define-popup .cd-resolved {
-    background: #0d3a66;
-    color: #79c0ff;
-  }
-  #click-define-popup .cd-resolved:hover {
-    background: #155a99;
-    border-color: #58a6ff;
-  }
-  #click-define-popup .cd-net-sub { color: #9ba3ad; }
-  #click-define-popup .cd-audio {
-    border-color: #3a3a3a;
-  }
-  #click-define-popup .cd-audio:hover { background: #333; }
-  #click-define-popup .cd-langselect {
-    background: #1e1e1e;
-    color: #e6e6e6;
-    border-color: #3a3a3a;
-  }
+/* Dark theme. The popup is built by the content script, which resolves the
+   "auto" setting against prefers-color-scheme and always stamps an explicit
+   cd-theme-light / cd-theme-dark class - so these rules live in one place
+   instead of being duplicated across a media query and a class selector. */
+#click-define-popup.cd-theme-dark {
+  background: #1e1e1e;
+  color: #e6e6e6;
+  border-color: #3a3a3a;
+}
+#click-define-popup.cd-theme-dark .cd-header,
+#click-define-popup.cd-theme-dark .cd-footer {
+  background: #2a2a2a;
+  border-color: #3a3a3a;
+}
+#click-define-popup.cd-theme-dark .cd-word { color: #58a6ff; }
+#click-define-popup.cd-theme-dark .cd-close { color: #9ba3ad; }
+#click-define-popup.cd-theme-dark .cd-close:hover { color: #fff; }
+#click-define-popup.cd-theme-dark .cd-lang,
+#click-define-popup.cd-theme-dark .cd-pos,
+#click-define-popup.cd-theme-dark .cd-loading,
+#click-define-popup.cd-theme-dark .cd-ipa,
+#click-define-popup.cd-theme-dark .cd-chiplabel,
+#click-define-popup.cd-theme-dark .cd-example { color: #9ba3ad; }
+#click-define-popup.cd-theme-dark .cd-lang-block + .cd-lang-block,
+#click-define-popup.cd-theme-dark .cd-chiprow,
+#click-define-popup.cd-theme-dark .cd-examples { border-color: #3a3a3a; }
+#click-define-popup.cd-theme-dark .cd-link { color: #58a6ff; }
+#click-define-popup.cd-theme-dark .cd-chip {
+  background: #0d3a66;
+  color: #79c0ff;
+}
+#click-define-popup.cd-theme-dark .cd-chip:hover {
+  background: #155a99;
+  border-color: #58a6ff;
+}
+#click-define-popup.cd-theme-dark .cd-back {
+  border-color: #3a3a3a;
+  color: #9ba3ad;
+}
+#click-define-popup.cd-theme-dark .cd-back:hover { background: #333; color: #fff; }
+#click-define-popup.cd-theme-dark .cd-resolved {
+  background: #0d3a66;
+  color: #79c0ff;
+}
+#click-define-popup.cd-theme-dark .cd-resolved:hover {
+  background: #155a99;
+  border-color: #58a6ff;
+}
+#click-define-popup.cd-theme-dark .cd-net-sub { color: #9ba3ad; }
+#click-define-popup.cd-theme-dark .cd-audio {
+  border-color: #3a3a3a;
+}
+#click-define-popup.cd-theme-dark .cd-audio:hover { background: #333; }
+#click-define-popup.cd-theme-dark .cd-langselect {
+  background: #1e1e1e;
+  color: #e6e6e6;
+  border-color: #3a3a3a;
 }

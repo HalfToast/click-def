@@ -39,6 +39,21 @@
     </section>
 
     <section>
+      <h2>Appearance</h2>
+      <label class="field">
+        <span>Theme</span>
+        <select id="theme">
+          <option value="auto">Auto (match system)</option>
+          <option value="light">Light</option>
+          <option value="dark">Dark</option>
+        </select>
+      </label>
+      <p class="hint">
+        Applies to the popup and to this settings page. "Auto" follows your system's light/dark setting.
+      </p>
+    </section>
+
+    <section>
       <h2>Behavior</h2>
       <label class="toggle">
         <input type="checkbox" id="requireModifier">
@@ -110,8 +125,8 @@
     <section>
       <h2>Sources</h2>
       <p class="hint">
-        <strong>Wiktionary</strong> provides multilingual definitions.
-        <strong>Free Dictionary API</strong> provides pronunciation, synonyms, and antonyms (English only).
+        <strong>Wiktionary</strong> provides multilingual definitions, IPA, and pronunciation audio.
+        <strong>Free Dictionary API</strong> adds an English pronunciation fallback plus contextual synonyms and antonyms.
       </p>
       <label class="toggle">
         <input type="checkbox" id="useFreeDictionary" checked>
